@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────── Catálogos ───────────────────────────
+
+model EquipmentType {
+  id                       String   @id @default(cuid())
+  code                     String   @unique          // CAM, EXC, PER
+  name                     String                    // Camión de acarreo
+  maintenanceIntervalHours Int                       // p.ej. 250
+  createdAt                DateTime @default(now())
+
+  equipment      Equipment[]
+  certifications Certification[]
+
+  @@map("equipment_types")
+}
+
+enum EquipmentStatus {
+  AVAILABLE          // disponible
+  BLOCKED            // alcanzó el umbral, no puede asignarse (regla 2)
+  IN_MAINTENANCE     // en taller
+  OUT_OF_SERVICE     // baja operativa manual
+}
+
+model Equipment {
+  id                          String          @id @default(cuid())
+  code                        String          @unique   // CAM-001
+  typeId                      String
+  currentHours                Decimal         @db.Decimal(10, 2) @default(0)
+  status                      EquipmentStatus @default(AVAILABLE)
+
+  // Umbral absoluto de horómetro que dispara el bloqueo.
+  nextMaintenanceHours        Decimal         @db.Decimal(10, 2)
+  // Intervalo propio de esta unidad; null = hereda del tipo.
+  maintenanceIntervalOverride Int?
+
+  version                     Int             @default(0)  // bloqueo optimista
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+
+  type            EquipmentType       @relation(fields: [typeId], references: [id])
+  assignments     Assignment[]
+  maintenances    MaintenanceRecord[]
+  hourmeterEntries HourmeterEntry[]
+  alerts          Alert[]
+
+  @@index([status])
+  @@index([typeId])
+  @@map("equipment")
+}
+
+model Operator {
+  id        String   @id @default(cuid())
+  code      String   @unique              // OP-001
+  fullName  String
+  document  String   @unique              // DNI
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  certifications Certification[]
+  assignments    Assignment[]
+
+  @@map("operators")
+}
+
+model Certification {
+  id              String   @id @default(cuid())
+  operatorId      String
+  equipmentTypeId String
+  issuedAt        DateTime @db.Date
+  expiresAt       DateTime @db.Date
+  documentRef     String?                 // n.º de certificado
+  createdAt       DateTime @default(now())
+
+  operator      Operator      @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  equipmentType EquipmentType @relation(fields: [equipmentTypeId], references: [id])
+
+  // Un operador puede tener varias certificaciones históricas del mismo tipo
+  // (renovaciones); vale la de mayor expiresAt vigente en la fecha del turno.
+  @@index([operatorId, equipmentTypeId, expiresAt])
+  @@map("certifications")
+}
+
+// ─────────────────────────── Operación ───────────────────────────
+
+enum ShiftJourney {
+  DAY
+  NIGHT
+}
+
+enum ShiftStatus {
+  PLANNED
+  CLOSED
+  CANCELLED
+}
+
+model Shift {
+  id           String       @id @default(cuid())
+  date         DateTime     @db.Date        // fecha operativa, sin hora
+  journey      ShiftJourney
+  plannedHours Decimal      @db.Decimal(5, 2)   // duración planificada
+  startsAt     DateTime                          // instante real (para vigencia de cert.)
+  endsAt       DateTime
+  status       ShiftStatus  @default(PLANNED)
+  closedAt     DateTime?
+  closedById   String?
+  createdAt    DateTime     @default(now())
+
+  assignments Assignment[]
+  closedBy    User?        @relation(fields: [closedById], references: [id])
+
+  @@unique([date, journey])        // un turno día y uno noche por fecha
+  @@index([status, date])
+  @@map("shifts")
+}
+
+enum AssignmentStatus {
+  ACTIVE       // vigente
+  AT_RISK      // vigente pero con un problema sobrevenido (regla abierta 1 y 5)
+  CANCELLED    // anulada
+  COMPLETED    // el turno se cerró y ya sumó horas
+}
+
+model Assignment {
+  id           String           @id @default(cuid())
+  shiftId      String
+  operatorId   String
+  equipmentId  String
+  status       AssignmentStatus @default(ACTIVE)
+
+  plannedHours Decimal          @db.Decimal(5, 2)     // copiadas del turno, editables
+  actualHours  Decimal?         @db.Decimal(5, 2)     // al cerrar el turno
+  varianceNote String?                                 // obligatoria si el desvío es alto
+
+  riskReason   String?                                 // por qué quedó AT_RISK
+  activeSlot   Int?             @default(1)            // 1 = ocupa cupo; null = cancelada
+
+  createdById  String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  shift     Shift               @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  operator  Operator            @relation(fields: [operatorId], references: [id])
+  equipment Equipment           @relation(fields: [equipmentId], references: [id])
+  createdBy User                @relation(fields: [createdById], references: [id])
+  override  AssignmentOverride?
+  alerts    Alert[]
+
+  // Reglas 6 y 7 garantizadas por la base de datos, no por la aplicación:
+  @@unique([shiftId, equipmentId, activeSlot], name: "uq_shift_equipment_active")
+  @@unique([shiftId, operatorId,  activeSlot], name: "uq_shift_operator_active")
+  @@index([equipmentId, status])
+  @@map("assignments")
+}
+
+model AssignmentOverride {
+  id             String   @id @default(cuid())
+  assignmentId   String   @unique
+  authorizedById String                        // debe ser rol SUPERVISOR
+  reason         String                        // obligatorio, mín. 15 caracteres
+  violatedRules  Json                          // snapshot de las violaciones salvadas
+  createdAt      DateTime @default(now())
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  authorizedBy User       @relation(fields: [authorizedById], references: [id])
+
+  @@map("assignment_overrides")
+}
+
+// ────────────────────── Mantenimiento y horómetro ──────────────────────
+
+model MaintenanceRecord {
+  id                 String   @id @default(cuid())
+  equipmentId        String
+  performedAt        DateTime                              // fecha del servicio
+  hoursAtService     Decimal  @db.Decimal(10, 2)           // horómetro real al momento
+  thresholdHours     Decimal  @db.Decimal(10, 2)           // umbral que debió cumplirse
+  overdueHours       Decimal  @db.Decimal(10, 2)           // desfase = real - umbral
+  nextThresholdHours Decimal  @db.Decimal(10, 2)           // próximo umbral calculado
+  responsible        String                                 // regla 3
+  notes              String?
+  registeredById     String
+  createdAt          DateTime @default(now())
+
+  equipment    Equipment @relation(fields: [equipmentId], references: [id])
+  registeredBy User      @relation(fields: [registeredById], references: [id])
+
+  @@index([equipmentId, performedAt])
+  @@map("maintenance_records")
+}
+
+enum HourmeterSource {
+  SHIFT_CLOSE
+  MAINTENANCE
+  MANUAL_ADJUSTMENT
+  INITIAL_LOAD
+}
+
+/// Libro mayor del horómetro: toda variación deja asiento.
+model HourmeterEntry {
+  id          String          @id @default(cuid())
+  equipmentId String
+  source      HourmeterSource
+  referenceId String?                                  // assignmentId / maintenanceId
+  hoursBefore Decimal         @db.Decimal(10, 2)
+  hoursDelta  Decimal         @db.Decimal(10, 2)
+  hoursAfter  Decimal         @db.Decimal(10, 2)
+  note        String?
+  createdById String?
+  createdAt   DateTime        @default(now())
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  @@index([equipmentId, createdAt])
+  @@map("hourmeter_entries")
+}
+
+// ─────────────────────────── Alertas y auth ───────────────────────────
+
+enum AlertType {
+  MAINTENANCE_DUE_SOON       // proyección: cruza umbral en los próximos 7 días
+  ASSIGNMENT_AT_RISK         // asignación futura con equipo bloqueado
+  CERT_EXPIRING_BEFORE_SHIFT // certificación vence antes/durante un turno programado
+  OVERRIDE_USED              // se autorizó una excepción
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Alert {
+  id           String        @id @default(cuid())
+  type         AlertType
+  severity     AlertSeverity
+  message      String
+  equipmentId  String?
+  assignmentId String?
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  equipment  Equipment?  @relation(fields: [equipmentId], references: [id])
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([resolvedAt, severity])
+  @@map("alerts")
+}
+
+enum Role {
+  SUPERVISOR
+  PLANNER
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(VIEWER)
+  createdAt    DateTime @default(now())
+
+  assignmentsCreated Assignment[]
+  overrides          AssignmentOverride[]
+  maintenances       MaintenanceRecord[]
+  shiftsClosed       Shift[]
+
+  @@map("users")
+}

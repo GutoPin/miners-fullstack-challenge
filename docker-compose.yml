@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: mineops-db
+    environment:
+      POSTGRES_USER: mineops
+      POSTGRES_PASSWORD: mineops
+      POSTGRES_DB: mineops
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mineops"]
+      interval: 5s
+      retries: 10
+volumes:
+  pgdata:
