@@ -3,6 +3,7 @@
  * cinco pantallas y para que las horas se escriban siempre con el mismo formato.
  */
 import type { AssignmentStatus, EquipmentStatus, Journey, ShiftStatus } from '../domain/types';
+import { toOperationalDate } from '../services/dates';
 
 export type Tono = 'ok' | 'aviso' | 'bloqueo' | 'taller' | 'neutro';
 
@@ -38,8 +39,16 @@ export function formatHoras(value: number | { toString(): string }): string {
   return horas.format(Number(value));
 }
 
-/** Días entre hoy y una fecha, en días completos. Negativo = ya pasó. */
+/**
+ * Días entre hoy y una fecha `@db.Date`, en días completos. Negativo = ya pasó.
+ *
+ * "Hoy" es el día de calendario en Lima, no la medianoche local del servidor: en Vercel el
+ * proceso corre en UTC y `TZ` es una variable reservada que no se puede definir, así que
+ * depender del reloj del servidor haría que un vencimiento se viera un día corrido.
+ */
 export function diasHasta(value: Date, hoy = new Date()): number {
   const dia = 24 * 60 * 60 * 1000;
-  return Math.round((value.getTime() - hoy.setHours(0, 0, 0, 0)) / dia);
+  const hoyEnLima = new Date(`${toOperationalDate(hoy)}T00:00:00.000Z`);
+
+  return Math.round((value.getTime() - hoyEnLima.getTime()) / dia);
 }
