@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "build:app": "next build",
     "test": "vitest run tests/unit",
-    "test:int": "dotenv -e .env -- vitest run tests/integration",
+    "test:int": "dotenv -e .env -- vitest run tests/integration --no-file-parallelism",
     "test:watch": "vitest tests/unit",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",

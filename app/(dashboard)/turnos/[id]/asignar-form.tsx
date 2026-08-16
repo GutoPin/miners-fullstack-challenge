@@ -1,11 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { postJson, type ApiError } from '@/src/components/api';
 import { PanelViolaciones } from '@/src/components/panel-violaciones';
 import { formatHoras } from '@/src/components/format';
+import type { Violation } from '@/src/domain/rules/violation';
 
 export interface OpcionEquipo {
   id: string;
@@ -47,6 +48,37 @@ export function AsignarForm({
   const [motivo, setMotivo] = useState('');
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // La previa se guarda junto con la combinación que la produjo: así, al cambiar de
+  // operador o equipo, el resultado viejo deja de mostrarse solo, sin tener que limpiarlo.
+  const [previa, setPrevia] = useState<{ clave: string; violations: Violation[] } | null>(null);
+  const clave = `${operatorId}|${equipmentId}`;
+  const previaActual = previa?.clave === clave ? previa.violations : null;
+
+  // Validación previa contra el servidor: en cuanto hay operador y equipo se pregunta qué
+  // pasaría. El retardo evita una petición por cada cambio del selector, y el `cancelado`
+  // descarta respuestas que llegan tarde y pisarían un resultado más nuevo.
+  useEffect(() => {
+    if (!operatorId || !equipmentId) return;
+
+    let cancelado = false;
+
+    const t = setTimeout(async () => {
+      const res = await postJson<{ violations: Violation[] }>('/api/assignments/validate', {
+        shiftId,
+        operatorId,
+        equipmentId,
+      });
+
+      if (!cancelado && res.ok) {
+        setPrevia({ clave: `${operatorId}|${equipmentId}`, violations: res.data.violations });
+      }
+    }, 300);
+
+    return () => {
+      cancelado = true;
+      clearTimeout(t);
+    };
+  }, [shiftId, operatorId, equipmentId]);
 
   const equipo = equipos.find((e) => e.id === equipmentId);
 
@@ -65,6 +97,7 @@ export function AsignarForm({
     setEnviando(false);
 
     if (res.ok) {
+      setPrevia(null);
       setEquipmentId('');
       setOperatorId('');
       setMotivo('');
@@ -150,6 +183,22 @@ export function AsignarForm({
         <p className="mt-3 text-xs text-muted">
           {equipo.code}: {equipo.estado} · {formatHoras(equipo.currentHours)} de{' '}
           {formatHoras(equipo.nextMaintenanceHours)} h del umbral.
+        </p>
+      )}
+
+      {!error && previaActual && previaActual.length > 0 && (
+        <div className="mt-4">
+          <PanelViolaciones
+            mensaje={`Validación previa: ${previaActual.length} ${previaActual.length === 1 ? 'regla incumplida' : 'reglas incumplidas'} con esta combinación.`}
+            violations={previaActual}
+          />
+        </div>
+      )}
+
+      {!error && previaActual?.length === 0 && (
+        <p className="mt-4 border border-emerald-700/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Validación previa: sin problemas. La comprobación definitiva se repite al asignar,
+          sobre el equipo bloqueado en la base.
         </p>
       )}
 

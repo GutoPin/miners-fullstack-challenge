@@ -7,8 +7,7 @@
  */
 import { Prisma } from '../db/generated/client';
 import { canBeOverridden, validateAssignment } from '../domain/rules/assignment-rules';
-import type { AssignmentContext } from '../domain/types';
-import { toIsoDate, toOperationalDate } from './dates';
+import { buildAssignmentContext } from './assignment-context';
 import { ServiceError, uniqueViolationToServiceError } from './errors';
 import { serializable } from './transaction';
 
@@ -41,75 +40,10 @@ export async function createAssignment(input: CreateAssignmentInput) {
       });
     }
 
-    // 2. Snapshot: todo lo que las reglas necesitan, leído bajo el mismo bloqueo.
-    const [equipment, shift, operator, vigentes] = await Promise.all([
-      tx.equipment.findUniqueOrThrow({
-        where: { id: input.equipmentId },
-        include: { type: true },
-      }),
-      tx.shift.findUnique({ where: { id: input.shiftId } }),
-      tx.operator.findUnique({
-        where: { id: input.operatorId },
-        include: { certifications: true },
-      }),
-      tx.assignment.findMany({
-        where: { shiftId: input.shiftId, status: { in: ['ACTIVE', 'AT_RISK'] } },
-        include: { operator: true, equipment: true },
-      }),
-    ]);
-
-    if (!shift) {
-      throw new ServiceError({
-        code: 'SHIFT_NOT_FOUND',
-        message: `No existe el turno solicitado (${input.shiftId}).`,
-        status: 404,
-      });
-    }
-
-    if (!operator) {
-      throw new ServiceError({
-        code: 'OPERATOR_NOT_FOUND',
-        message: `No existe el operador solicitado (${input.operatorId}).`,
-        status: 404,
-      });
-    }
-
-    const context: AssignmentContext = {
-      shift: {
-        id: shift.id,
-        date: toIsoDate(shift.date),
-        endDate: toOperationalDate(shift.endsAt),
-        journey: shift.journey,
-        status: shift.status,
-        plannedHours: Number(shift.plannedHours),
-      },
-      equipment: {
-        id: equipment.id,
-        code: equipment.code,
-        typeId: equipment.typeId,
-        typeName: equipment.type.name,
-        status: equipment.status,
-        currentHours: Number(equipment.currentHours),
-        nextMaintenanceHours: Number(equipment.nextMaintenanceHours),
-      },
-      operator: {
-        id: operator.id,
-        fullName: operator.fullName,
-        active: operator.active,
-      },
-      certifications: operator.certifications.map((c) => ({
-        equipmentTypeId: c.equipmentTypeId,
-        issuedAt: toIsoDate(c.issuedAt),
-        expiresAt: toIsoDate(c.expiresAt),
-      })),
-      activeAssignments: vigentes.map((a) => ({
-        id: a.id,
-        operatorId: a.operatorId,
-        operatorName: a.operator.fullName,
-        equipmentId: a.equipmentId,
-        equipmentCode: a.equipment.code,
-      })),
-    };
+    // 2. Snapshot: todo lo que las reglas necesitan, leído bajo el mismo bloqueo y con la
+    //    misma función que alimenta la validación previa de la interfaz.
+    const { context, equipmentCode, operatorName, shiftPlannedHours } =
+      await buildAssignmentContext(tx, input);
 
     // 3. Dominio puro: devuelve TODAS las violaciones (regla 11).
     const violations = validateAssignment(context);
@@ -141,10 +75,10 @@ export async function createAssignment(input: CreateAssignmentInput) {
     try {
       const assignment = await tx.assignment.create({
         data: {
-          shiftId: shift.id,
-          operatorId: operator.id,
-          equipmentId: equipment.id,
-          plannedHours: input.plannedHours ?? Number(shift.plannedHours),
+          shiftId: input.shiftId,
+          operatorId: input.operatorId,
+          equipmentId: input.equipmentId,
+          plannedHours: input.plannedHours ?? shiftPlannedHours,
           createdById: input.userId,
           // Forzada no es normal, y se ve así en toda la aplicación (DECISIONES §2.2).
           status: forzada ? 'AT_RISK' : 'ACTIVE',
@@ -171,9 +105,9 @@ export async function createAssignment(input: CreateAssignmentInput) {
             {
               type: 'OVERRIDE_USED',
               severity: 'CRITICAL',
-              equipmentId: equipment.id,
+              equipmentId: input.equipmentId,
               assignmentId: assignment.id,
-              message: `${supervisor.name} autorizó una excepción para asignar ${equipment.code} a ${operator.fullName}: ${input.override.reason}`,
+              message: `${supervisor.name} autorizó una excepción para asignar ${equipmentCode} a ${operatorName}: ${input.override.reason}`,
             },
           ],
         });
@@ -181,10 +115,7 @@ export async function createAssignment(input: CreateAssignmentInput) {
 
       return { assignment, warnings, forced: forzada };
     } catch (error) {
-      const conflicto = uniqueViolationToServiceError(error, {
-        equipmentCode: equipment.code,
-        operatorName: operator.fullName,
-      });
+      const conflicto = uniqueViolationToServiceError(error, { equipmentCode, operatorName });
 
       throw conflicto ?? error;
     }

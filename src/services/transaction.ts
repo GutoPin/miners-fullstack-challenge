@@ -42,8 +42,14 @@ export async function serializable<T>(
 }
 
 function esConflictoDeEscritura(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === CONFLICTO_DE_ESCRITURA
-  );
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === CONFLICTO_DE_ESCRITURA;
+  }
+
+  // Bajo contención alta el fallo no siempre llega como error de Prisma: el driver lo
+  // reporta antes, como `DriverAdapterError: TransactionWriteConflict`. Es el mismo
+  // suceso (SQLSTATE 40001) y merece la misma respuesta, no un 500.
+  const texto = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+
+  return /TransactionWriteConflict|could not serialize|deadlock detected|40001/i.test(texto);
 }
