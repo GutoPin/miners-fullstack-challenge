@@ -43,13 +43,52 @@ export class ServiceError extends Error {
 }
 
 /**
+ * Traduce cualquier error a la respuesta del API. Los route handlers solo serializan lo
+ * que sale de aquí: un error inesperado nunca debe filtrar su mensaje interno al usuario.
+ */
+export function toErrorResponse(error: unknown): {
+  status: number;
+  body: ReturnType<ServiceError['toResponse']>;
+} {
+  if (error instanceof ServiceError) {
+    return { status: error.status, body: error.toResponse() };
+  }
+
+  // Un error inesperado no se muestra al usuario, pero tampoco se pierde: queda en los
+  // logs del servidor como JSON, que es donde hay que ir a buscarlo.
+  console.error(
+    JSON.stringify({
+      level: 'error',
+      event: 'unhandled_error',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    }),
+  );
+
+  return {
+    status: 500,
+    body: {
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Ocurrió un error inesperado al procesar la solicitud. Intente nuevamente.',
+        canBeOverridden: undefined,
+        violations: [],
+      },
+    },
+  };
+}
+
+/**
  * Traduce la violación de unicidad de la base (P2002) al rechazo de negocio que
  * corresponde. Es la tercera capa de la defensa contra concurrencia
  * (`docs/ARQUITECTURA.md` §5): dos requests simultáneos pasan la validación, uno inserta
  * y el otro llega aquí.
  *
- * `meta.target` puede venir como el nombre del índice o como la lista de columnas según
- * el motor, así que se busca la palabra dentro del texto en vez de comparar formas.
+ * Qué índice se violó se averigua mirando `meta.target` **y** el mensaje: con el driver
+ * adapter de Prisma 7, `meta.target` llega vacío y los nombres de las columnas solo
+ * aparecen en el texto del error ("Unique constraint failed on the fields: …"). Se busca la
+ * palabra dentro de ambos, así funciona tanto si viene el nombre del índice como si viene
+ * la lista de columnas.
  */
 export function uniqueViolationToServiceError(
   error: unknown,
@@ -59,7 +98,7 @@ export function uniqueViolationToServiceError(
     return null;
   }
 
-  const target = String(error.meta?.target ?? '');
+  const target = `${String(error.meta?.target ?? '')} ${error.message}`.toLowerCase();
 
   if (target.includes('equipment')) {
     return new ServiceError({

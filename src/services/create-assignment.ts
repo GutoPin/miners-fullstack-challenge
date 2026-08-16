@@ -6,11 +6,11 @@
  * La garantía final igual la da el índice único de la base (§5).
  */
 import { Prisma } from '../db/generated/client';
-import { prisma } from '../db/prisma';
 import { canBeOverridden, validateAssignment } from '../domain/rules/assignment-rules';
 import type { AssignmentContext } from '../domain/types';
 import { toIsoDate, toOperationalDate } from './dates';
 import { ServiceError, uniqueViolationToServiceError } from './errors';
+import { serializable } from './transaction';
 
 export interface CreateAssignmentInput {
   shiftId: string;
@@ -26,172 +26,169 @@ export interface CreateAssignmentInput {
 const MOTIVO_MINIMO = 15;
 
 export async function createAssignment(input: CreateAssignmentInput) {
-  return prisma.$transaction(
-    async (tx) => {
-      // 1. Bloqueo pesimista de la fila del equipo. Serializa las validaciones de dos
-      //    supervisores sobre el mismo equipo: el segundo espera aquí y lee el estado ya
-      //    actualizado, en vez de concluir "está disponible" con datos viejos.
-      const bloqueado = await tx.$queryRaw<{ id: string }[]>`
-        SELECT "id" FROM "equipment" WHERE "id" = ${input.equipmentId} FOR UPDATE`;
+  return serializable(async (tx) => {
+    // 1. Bloqueo pesimista de la fila del equipo. Serializa las validaciones de dos
+    //    supervisores sobre el mismo equipo: el segundo espera aquí y lee el estado ya
+    //    actualizado, en vez de concluir "está disponible" con datos viejos.
+    const bloqueado = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "equipment" WHERE "id" = ${input.equipmentId} FOR UPDATE`;
 
-      if (bloqueado.length === 0) {
+    if (bloqueado.length === 0) {
+      throw new ServiceError({
+        code: 'EQUIPMENT_NOT_FOUND',
+        message: `No existe el equipo solicitado (${input.equipmentId}).`,
+        status: 404,
+      });
+    }
+
+    // 2. Snapshot: todo lo que las reglas necesitan, leído bajo el mismo bloqueo.
+    const [equipment, shift, operator, vigentes] = await Promise.all([
+      tx.equipment.findUniqueOrThrow({
+        where: { id: input.equipmentId },
+        include: { type: true },
+      }),
+      tx.shift.findUnique({ where: { id: input.shiftId } }),
+      tx.operator.findUnique({
+        where: { id: input.operatorId },
+        include: { certifications: true },
+      }),
+      tx.assignment.findMany({
+        where: { shiftId: input.shiftId, status: { in: ['ACTIVE', 'AT_RISK'] } },
+        include: { operator: true, equipment: true },
+      }),
+    ]);
+
+    if (!shift) {
+      throw new ServiceError({
+        code: 'SHIFT_NOT_FOUND',
+        message: `No existe el turno solicitado (${input.shiftId}).`,
+        status: 404,
+      });
+    }
+
+    if (!operator) {
+      throw new ServiceError({
+        code: 'OPERATOR_NOT_FOUND',
+        message: `No existe el operador solicitado (${input.operatorId}).`,
+        status: 404,
+      });
+    }
+
+    const context: AssignmentContext = {
+      shift: {
+        id: shift.id,
+        date: toIsoDate(shift.date),
+        endDate: toOperationalDate(shift.endsAt),
+        journey: shift.journey,
+        status: shift.status,
+        plannedHours: Number(shift.plannedHours),
+      },
+      equipment: {
+        id: equipment.id,
+        code: equipment.code,
+        typeId: equipment.typeId,
+        typeName: equipment.type.name,
+        status: equipment.status,
+        currentHours: Number(equipment.currentHours),
+        nextMaintenanceHours: Number(equipment.nextMaintenanceHours),
+      },
+      operator: {
+        id: operator.id,
+        fullName: operator.fullName,
+        active: operator.active,
+      },
+      certifications: operator.certifications.map((c) => ({
+        equipmentTypeId: c.equipmentTypeId,
+        issuedAt: toIsoDate(c.issuedAt),
+        expiresAt: toIsoDate(c.expiresAt),
+      })),
+      activeAssignments: vigentes.map((a) => ({
+        id: a.id,
+        operatorId: a.operatorId,
+        operatorName: a.operator.fullName,
+        equipmentId: a.equipmentId,
+        equipmentCode: a.equipment.code,
+      })),
+    };
+
+    // 3. Dominio puro: devuelve TODAS las violaciones (regla 11).
+    const violations = validateAssignment(context);
+    const bloqueantes = violations.filter((v) => v.severity !== 'WARNING');
+    const warnings = violations.filter((v) => v.severity === 'WARNING');
+
+    let forzada = false;
+
+    if (bloqueantes.length > 0) {
+      const autorizable = canBeOverridden(violations);
+
+      if (!input.override || !autorizable) {
         throw new ServiceError({
-          code: 'EQUIPMENT_NOT_FOUND',
-          message: `No existe el equipo solicitado (${input.equipmentId}).`,
-          status: 404,
+          code: 'ASSIGNMENT_REJECTED',
+          message: `No se puede crear la asignación: ${bloqueantes.length} ${bloqueantes.length === 1 ? 'regla incumplida' : 'reglas incumplidas'}.`,
+          status: 409,
+          violations,
+          canBeOverridden: autorizable,
         });
       }
 
-      // 2. Snapshot: todo lo que las reglas necesitan, leído bajo el mismo bloqueo.
-      const [equipment, shift, operator, vigentes] = await Promise.all([
-        tx.equipment.findUniqueOrThrow({
-          where: { id: input.equipmentId },
-          include: { type: true },
-        }),
-        tx.shift.findUnique({ where: { id: input.shiftId } }),
-        tx.operator.findUnique({
-          where: { id: input.operatorId },
-          include: { certifications: true },
-        }),
-        tx.assignment.findMany({
-          where: { shiftId: input.shiftId, status: { in: ['ACTIVE', 'AT_RISK'] } },
-          include: { operator: true, equipment: true },
-        }),
-      ]);
+      forzada = true;
+    }
 
-      if (!shift) {
-        throw new ServiceError({
-          code: 'SHIFT_NOT_FOUND',
-          message: `No existe el turno solicitado (${input.shiftId}).`,
-          status: 404,
-        });
-      }
+    const supervisor = forzada ? await autorizar(tx, input) : null;
 
-      if (!operator) {
-        throw new ServiceError({
-          code: 'OPERATOR_NOT_FOUND',
-          message: `No existe el operador solicitado (${input.operatorId}).`,
-          status: 404,
-        });
-      }
-
-      const context: AssignmentContext = {
-        shift: {
-          id: shift.id,
-          date: toIsoDate(shift.date),
-          endDate: toOperationalDate(shift.endsAt),
-          journey: shift.journey,
-          status: shift.status,
-          plannedHours: Number(shift.plannedHours),
+    // 4. Insertar. El índice único es la última línea de defensa: si dos requests
+    //    llegaron juntos, uno entra y el otro cae en el catch de abajo.
+    try {
+      const assignment = await tx.assignment.create({
+        data: {
+          shiftId: shift.id,
+          operatorId: operator.id,
+          equipmentId: equipment.id,
+          plannedHours: input.plannedHours ?? Number(shift.plannedHours),
+          createdById: input.userId,
+          // Forzada no es normal, y se ve así en toda la aplicación (DECISIONES §2.2).
+          status: forzada ? 'AT_RISK' : 'ACTIVE',
+          riskReason: supervisor
+            ? `Asignación forzada por ${supervisor.name} — ${input.override?.reason}`
+            : null,
         },
-        equipment: {
-          id: equipment.id,
-          code: equipment.code,
-          typeId: equipment.typeId,
-          typeName: equipment.type.name,
-          status: equipment.status,
-          currentHours: Number(equipment.currentHours),
-          nextMaintenanceHours: Number(equipment.nextMaintenanceHours),
-        },
-        operator: {
-          id: operator.id,
-          fullName: operator.fullName,
-          active: operator.active,
-        },
-        certifications: operator.certifications.map((c) => ({
-          equipmentTypeId: c.equipmentTypeId,
-          issuedAt: toIsoDate(c.issuedAt),
-          expiresAt: toIsoDate(c.expiresAt),
-        })),
-        activeAssignments: vigentes.map((a) => ({
-          id: a.id,
-          operatorId: a.operatorId,
-          operatorName: a.operator.fullName,
-          equipmentId: a.equipmentId,
-          equipmentCode: a.equipment.code,
-        })),
-      };
+      });
 
-      // 3. Dominio puro: devuelve TODAS las violaciones (regla 11).
-      const violations = validateAssignment(context);
-      const bloqueantes = violations.filter((v) => v.severity !== 'WARNING');
-      const warnings = violations.filter((v) => v.severity === 'WARNING');
-
-      let forzada = false;
-
-      if (bloqueantes.length > 0) {
-        const autorizable = canBeOverridden(violations);
-
-        if (!input.override || !autorizable) {
-          throw new ServiceError({
-            code: 'ASSIGNMENT_REJECTED',
-            message: `No se puede crear la asignación: ${bloqueantes.length} ${bloqueantes.length === 1 ? 'regla incumplida' : 'reglas incumplidas'}.`,
-            status: 409,
-            violations,
-            canBeOverridden: autorizable,
-          });
-        }
-
-        forzada = true;
-      }
-
-      const supervisor = forzada ? await autorizar(tx, input) : null;
-
-      // 4. Insertar. El índice único es la última línea de defensa: si dos requests
-      //    llegaron juntos, uno entra y el otro cae en el catch de abajo.
-      try {
-        const assignment = await tx.assignment.create({
+      if (supervisor && input.override) {
+        await tx.assignmentOverride.create({
           data: {
-            shiftId: shift.id,
-            operatorId: operator.id,
-            equipmentId: equipment.id,
-            plannedHours: input.plannedHours ?? Number(shift.plannedHours),
-            createdById: input.userId,
-            // Forzada no es normal, y se ve así en toda la aplicación (DECISIONES §2.2).
-            status: forzada ? 'AT_RISK' : 'ACTIVE',
-            riskReason: supervisor
-              ? `Asignación forzada por ${supervisor.name} — ${input.override?.reason}`
-              : null,
+            assignmentId: assignment.id,
+            authorizedById: supervisor.id,
+            reason: input.override.reason,
+            // El snapshot de las violaciones salvadas es JSON plano: aunque mañana
+            // cambien las reglas, el registro conserva qué se saltó ese día.
+            violatedRules: bloqueantes as unknown as Prisma.InputJsonValue,
           },
         });
 
-        if (supervisor && input.override) {
-          await tx.assignmentOverride.create({
-            data: {
+        await tx.alert.createMany({
+          data: [
+            {
+              type: 'OVERRIDE_USED',
+              severity: 'CRITICAL',
+              equipmentId: equipment.id,
               assignmentId: assignment.id,
-              authorizedById: supervisor.id,
-              reason: input.override.reason,
-              // El snapshot de las violaciones salvadas es JSON plano: aunque mañana
-              // cambien las reglas, el registro conserva qué se saltó ese día.
-              violatedRules: bloqueantes as unknown as Prisma.InputJsonValue,
+              message: `${supervisor.name} autorizó una excepción para asignar ${equipment.code} a ${operator.fullName}: ${input.override.reason}`,
             },
-          });
-
-          await tx.alert.createMany({
-            data: [
-              {
-                type: 'OVERRIDE_USED',
-                severity: 'CRITICAL',
-                equipmentId: equipment.id,
-                assignmentId: assignment.id,
-                message: `${supervisor.name} autorizó una excepción para asignar ${equipment.code} a ${operator.fullName}: ${input.override.reason}`,
-              },
-            ],
-          });
-        }
-
-        return { assignment, warnings, forced: forzada };
-      } catch (error) {
-        const conflicto = uniqueViolationToServiceError(error, {
-          equipmentCode: equipment.code,
-          operatorName: operator.fullName,
+          ],
         });
-
-        throw conflicto ?? error;
       }
-    },
-    { isolationLevel: 'Serializable' },
-  );
+
+      return { assignment, warnings, forced: forzada };
+    } catch (error) {
+      const conflicto = uniqueViolationToServiceError(error, {
+        equipmentCode: equipment.code,
+        operatorName: operator.fullName,
+      });
+
+      throw conflicto ?? error;
+    }
+  });
 }
 
 /** Solo un SUPERVISOR fuerza una asignación, y con un motivo que sirva para auditar. */
