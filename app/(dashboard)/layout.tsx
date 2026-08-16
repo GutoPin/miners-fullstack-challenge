@@ -7,6 +7,8 @@ const SECCIONES = [
   { href: '/equipos', label: 'Equipos' },
   { href: '/operadores', label: 'Operadores' },
   { href: '/turnos', label: 'Turnos' },
+  { href: '/proyeccion', label: 'Proyección' },
+  { href: '/auditoria', label: 'Auditoría' },
 ];
 
 const ROL: Record<string, string> = {

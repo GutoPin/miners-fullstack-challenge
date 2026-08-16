@@ -1,4 +1,5 @@
 import { revalidatePath } from 'next/cache';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { ESTADO_TURNO, JORNADA, formatHoras } from '@/src/components/format';
@@ -141,7 +142,9 @@ export default async function TurnosPage({
                 {turnos.map((t) => (
                   <tr key={t.id}>
                     <td className={`${tabla.td} font-mono whitespace-nowrap`}>
-                      {formatIsoDate(toIsoDate(t.date))}
+                      <Link href={`/turnos/${t.id}`} className="hover:text-accent">
+                        {formatIsoDate(toIsoDate(t.date))}
+                      </Link>
                     </td>
                     <td className={tabla.td}>{JORNADA[t.journey]}</td>
                     <td className={tabla.num}>{formatHoras(t.plannedHours)} h</td>
@@ -178,8 +181,8 @@ export default async function TurnosPage({
       </Panel>
 
       <p className="mt-3 text-xs text-muted">
-        Asignar equipos y cerrar turnos se hace desde el detalle de cada turno, que llega en
-        la siguiente entrega junto con el panel de violaciones.
+        Abra un turno para asignar equipos, resolver asignaciones en riesgo y cerrarlo con las
+        horas reales.
       </p>
     </>
   );

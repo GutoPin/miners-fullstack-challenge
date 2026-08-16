@@ -12,10 +12,17 @@ import { formatIsoDate, toIsoDate, toOperationalDate } from '@/src/services/date
 
 export const dynamic = 'force-dynamic';
 
+const ALERTA: Record<string, string> = {
+  MAINTENANCE_DUE_SOON: 'Mantenimiento',
+  ASSIGNMENT_AT_RISK: 'Asignación en riesgo',
+  CERT_EXPIRING_BEFORE_SHIFT: 'Certificación',
+  OVERRIDE_USED: 'Excepción autorizada',
+};
+
 export default async function TableroPage() {
   const hoy = new Date(`${toOperationalDate(new Date())}T00:00:00.000Z`);
 
-  const [equipos, turnos] = await Promise.all([
+  const [equipos, turnos, alertas] = await Promise.all([
     prisma.equipment.findMany({ include: { type: true }, orderBy: { code: 'asc' } }),
     prisma.shift.findMany({
       where: { date: { gte: hoy } },
@@ -23,7 +30,17 @@ export default async function TableroPage() {
       orderBy: [{ date: 'asc' }, { journey: 'asc' }],
       take: 6,
     }),
+    prisma.alert.findMany({
+      where: { resolvedAt: null },
+      include: { equipment: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
   ]);
+
+  // Las críticas primero: son las que exigen una decisión hoy.
+  const ORDEN = { CRITICAL: 0, WARNING: 1, INFO: 2 } as const;
+  const activas = [...alertas].sort((a, b) => ORDEN[a.severity] - ORDEN[b.severity]);
 
   const porEstado = equipos.reduce<Record<string, number>>((acc, e) => {
     acc[e.status] = (acc[e.status] ?? 0) + 1;
@@ -43,6 +60,36 @@ export default async function TableroPage() {
         titulo="Tablero"
         descripcion="Estado de la flota y turnos programados. Las reglas se validan en el servidor: lo que se ve aquí es el resultado, no una copia."
       />
+
+      <Panel titulo={`Alertas activas (${activas.length})`} className="mb-6">
+        {activas.length === 0 ? (
+          <p className="px-4 py-5 text-sm text-muted">
+            Sin alertas abiertas. Las alertas se resuelven solas cuando desaparece su causa:
+            registrar el mantenimiento de un equipo bloqueado cierra las suyas.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {activas.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
+                <Badge tono={a.severity === 'CRITICAL' ? 'bloqueo' : 'aviso'}>
+                  {ALERTA[a.type] ?? a.type}
+                </Badge>
+                <p className="flex-1 text-sm">
+                  {a.message}
+                  {a.equipment && (
+                    <Link
+                      href={`/equipos/${a.equipmentId}`}
+                      className="ml-2 text-xs underline hover:text-accent"
+                    >
+                      ver {a.equipment.code}
+                    </Link>
+                  )}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <Panel titulo="Flota por estado">

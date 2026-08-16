@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { auth } from '@/src/auth';
+
 import { ESTADO_EQUIPO, formatHoras } from '@/src/components/format';
 import { Badge, BarraHorometro, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toOperationalDate } from '@/src/services/dates';
+import { RegistrarMantenimiento } from './registrar-mantenimiento';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +20,8 @@ const ORIGEN: Record<string, string> = {
 
 export default async function EquipoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const session = await auth();
+  const puedeOperar = session?.user.role === 'PLANNER' || session?.user.role === 'SUPERVISOR';
 
   const equipo = await prisma.equipment.findUnique({
     where: { id },
@@ -129,6 +134,18 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
           </p>
         </Panel>
       </div>
+
+      {puedeOperar && equipo.status !== 'OUT_OF_SERVICE' && (
+        <Panel titulo="Registrar mantenimiento" className="mt-6">
+          <RegistrarMantenimiento
+            equipmentId={equipo.id}
+            code={equipo.code}
+            currentHours={actual}
+            threshold={umbral}
+            interval={intervalo}
+          />
+        </Panel>
+      )}
 
       <Panel titulo="Bitácora de horómetro" className="mt-6">
         {equipo.hourmeterEntries.length === 0 ? (
