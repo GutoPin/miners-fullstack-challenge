@@ -6,26 +6,8 @@ import type { ZodType } from 'zod';
 
 import { ServiceError, toErrorResponse } from '@/src/services/errors';
 
-/**
- * Identidad del que hace la llamada.
- *
- * Hasta que entre Auth.js (día 4 del plan) viaja en la cabecera `x-user-id`, para poder
- * probar los endpoints con `curl`. Cuando llegue la sesión, cambia solo esta función: el
- * contrato del cuerpo de las peticiones no se mueve.
- */
-export function requireUserId(request: Request): string {
-  const userId = request.headers.get('x-user-id');
-
-  if (!userId) {
-    throw new ServiceError({
-      code: 'UNAUTHENTICATED',
-      message: 'Falta identificar al usuario que ejecuta la acción (cabecera x-user-id).',
-      status: 401,
-    });
-  }
-
-  return userId;
-}
+// Las guardas viven en `src/auth`: las usan también las Server Actions de las páginas.
+export { requireRole, requireSession } from '@/src/auth';
 
 /** Valida el cuerpo con Zod y devuelve un error accionable, nunca "error de validación". */
 export function parseBody<T>(schema: ZodType<T>, body: unknown): T {

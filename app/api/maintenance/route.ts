@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { errorResponse, parseBody, requireUserId } from '@/app/api/http';
+import { errorResponse, parseBody, requireRole } from '@/app/api/http';
 import { registerMaintenance } from '@/src/services/register-maintenance';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const userId = requireUserId(request);
+    const { id: userId } = await requireRole('PLANNER', 'SUPERVISOR');
     const input = parseBody(schema, await request.json());
 
     const result = await registerMaintenance({ ...input, userId });

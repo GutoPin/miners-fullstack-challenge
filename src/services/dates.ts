@@ -2,9 +2,9 @@
  * La única aritmética de zona horaria del proyecto (CLAUDE.md §8): se almacena en UTC,
  * la fecha del turno es un `date` puro y se muestra en `America/Lima`.
  */
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 
-import type { IsoDate } from '../domain/types';
+import type { IsoDate, Journey } from '../domain/types';
 
 export const TIMEZONE = 'America/Lima';
 
@@ -36,4 +36,25 @@ export function toOperationalDate(value: Date): IsoDate {
 export function formatIsoDate(value: IsoDate): string {
   const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;
+}
+
+/** La columna `date` es fecha pura: '2026-08-18' → medianoche UTC, sin correr el día. */
+export function toDateColumn(value: IsoDate): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+/**
+ * Ventana real del turno a partir de su fecha operativa: DÍA empieza 07:00 y NOCHE 19:00,
+ * hora de Lima. Se guarda el instante en UTC, que es contra lo que se compara si una
+ * certificación vence a mitad de turno.
+ */
+export function shiftWindow(
+  date: IsoDate,
+  journey: Journey,
+  plannedHours: number,
+): { startsAt: Date; endsAt: Date } {
+  const inicio = journey === 'DAY' ? '07:00:00' : '19:00:00';
+  const startsAt = fromZonedTime(`${date}T${inicio}`, TIMEZONE);
+
+  return { startsAt, endsAt: new Date(startsAt.getTime() + plannedHours * 3_600_000) };
 }
