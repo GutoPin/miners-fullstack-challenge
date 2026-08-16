@@ -8,8 +8,8 @@ El sistema **no deja** que se asigne un equipo bloqueado, un operador sin certif
 vigente o el mismo equipo/operador dos veces en el mismo turno, y **proyecta** qué equipos
 van a llegar a su mantenimiento en los próximos 7 días según los turnos ya programados.
 
-- 🌐 **App desplegada:** `https://<tu-app>.vercel.app`
-- 📦 **Repositorio:** `https://github.com/<tu-usuario>/mineops`
+- 🌐 **App desplegada:** <https://miners-fullstack-challenge.vercel.app>
+- 📦 **Repositorio:** <https://github.com/GutoPin/miners-fullstack-challenge>
 - 🧠 **Decisiones de diseño:** [`DECISIONES.md`](./DECISIONES.md)
 
 ---
