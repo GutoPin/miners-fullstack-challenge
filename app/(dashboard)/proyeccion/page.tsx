@@ -29,15 +29,15 @@ export default async function ProyeccionPage() {
           <table className={tabla.table}>
             <thead>
               <tr>
-                <th className={tabla.th}>Equipo</th>
-                <th className={tabla.th}>Tipo</th>
-                <th className={`${tabla.th} text-right`}>Horómetro</th>
-                <th className={`${tabla.th} text-right`}>Umbral</th>
-                <th className={`${tabla.th} text-right`}>Faltan</th>
-                <th className={tabla.th}>Cruza el</th>
-                <th className={tabla.th}>En turno</th>
-                <th className={`${tabla.th} text-right`}>Turnos</th>
-                <th className={tabla.th}>Situación</th>
+                <th scope="col" className={tabla.th}>Equipo</th>
+                <th scope="col" className={tabla.th}>Tipo</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Horómetro</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Umbral</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Faltan</th>
+                <th scope="col" className={tabla.th}>Cruza el</th>
+                <th scope="col" className={tabla.th}>En turno</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Turnos</th>
+                <th scope="col" className={tabla.th}>Situación</th>
               </tr>
             </thead>
             <tbody>

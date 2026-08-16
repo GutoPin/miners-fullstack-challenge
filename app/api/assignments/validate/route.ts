@@ -1,15 +1,15 @@
 import { z } from 'zod';
 
-import { errorResponse, parseBody, requireSession } from '@/app/api/http';
+import { errorResponse, parseBody, requireSession, traza } from '@/app/api/http';
 import { prisma } from '@/src/db/prisma';
 import { previewAssignment } from '@/src/services/assignment-context';
 
 export const dynamic = 'force-dynamic';
 
 const schema = z.object({
-  shiftId: z.string().min(1),
-  operatorId: z.string().min(1),
-  equipmentId: z.string().min(1),
+  shiftId: z.string().min(1, 'indique el turno'),
+  operatorId: z.string().min(1, 'indique el operador'),
+  equipmentId: z.string().min(1, 'indique el equipo'),
 });
 
 /**
@@ -19,12 +19,15 @@ const schema = z.object({
  * el estado puede cambiar, y la garantía se toma con la fila bloqueada.
  */
 export async function POST(request: Request) {
+  // Solo lee: no deja línea de log en el caso feliz, o el log se llenaría de tecleo.
+  const t = traza(request, 'assignment.validate');
+
   try {
     await requireSession();
     const input = parseBody(schema, await request.json());
 
     return Response.json(await previewAssignment(prisma, input));
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, t);
   }
 }

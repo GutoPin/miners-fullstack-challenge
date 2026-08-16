@@ -37,7 +37,11 @@ export function CancelarAsignacion({ assignmentId, etiqueta }: { assignmentId: s
       >
         {enviando ? 'Cancelando…' : 'Cancelar'}
       </button>
-      {error && <p className="mt-1 text-xs text-red-800">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-red-800">
+          {error}
+        </p>
+      )}
     </>
   );
 }

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { auth, signOut } from '@/src/auth';
+import { NavLink } from '@/src/components/nav-link';
 
 const SECCIONES = [
   { href: '/', label: 'Tablero' },
@@ -22,7 +23,19 @@ export default async function DashboardLayout({ children }: LayoutProps<'/'>) {
 
   return (
     <div className="lg:grid lg:min-h-svh lg:grid-cols-[15rem_1fr]">
-      <nav className="border-b border-line bg-surface lg:sticky lg:top-0 lg:h-svh lg:border-r lg:border-b-0">
+      {/* Con seis secciones y tablas largas, tabular hasta el contenido cansa. Solo se ve
+          al enfocarlo con el teclado. */}
+      <a
+        href="#contenido"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:bg-ink focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+      >
+        Saltar al contenido
+      </a>
+
+      <nav
+        aria-label="Secciones"
+        className="border-b border-line bg-surface lg:sticky lg:top-0 lg:h-svh lg:border-r lg:border-b-0"
+      >
         <div className="flex items-center justify-between px-5 py-4 lg:block">
           <Link href="/" className="block">
             <span className="rotulo">Faena · Cerro Verde</span>
@@ -33,12 +46,7 @@ export default async function DashboardLayout({ children }: LayoutProps<'/'>) {
         <ul className="flex gap-1 overflow-x-auto px-3 pb-3 lg:mt-4 lg:flex-col lg:gap-0.5 lg:px-3">
           {SECCIONES.map((s) => (
             <li key={s.href}>
-              <Link
-                href={s.href}
-                className="block px-3 py-2 text-sm whitespace-nowrap hover:bg-canvas hover:text-accent"
-              >
-                {s.label}
-              </Link>
+              <NavLink href={s.href}>{s.label}</NavLink>
             </li>
           ))}
         </ul>
@@ -61,7 +69,9 @@ export default async function DashboardLayout({ children }: LayoutProps<'/'>) {
         )}
       </nav>
 
-      <main className="px-6 py-8 lg:px-10 lg:py-10">{children}</main>
+      <main id="contenido" className="px-6 py-8 lg:px-10 lg:py-10">
+        {children}
+      </main>
     </div>
   );
 }

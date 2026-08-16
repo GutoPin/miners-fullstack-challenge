@@ -156,11 +156,11 @@ export default async function TableroPage() {
           <table className={tabla.table}>
             <thead>
               <tr>
-                <th className={tabla.th}>Equipo</th>
-                <th className={tabla.th}>Tipo</th>
-                <th className={tabla.th}>Estado</th>
-                <th className={`${tabla.th} text-right`}>Horómetro</th>
-                <th className={`${tabla.th} text-right`}>Umbral</th>
+                <th scope="col" className={tabla.th}>Equipo</th>
+                <th scope="col" className={tabla.th}>Tipo</th>
+                <th scope="col" className={tabla.th}>Estado</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Horómetro</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Umbral</th>
               </tr>
             </thead>
             <tbody>

@@ -186,24 +186,28 @@ export function AsignarForm({
         </p>
       )}
 
-      {!error && previaActual && previaActual.length > 0 && (
-        <div className="mt-4">
-          <PanelViolaciones
-            mensaje={`Validación previa: ${previaActual.length} ${previaActual.length === 1 ? 'regla incumplida' : 'reglas incumplidas'} con esta combinación.`}
-            violations={previaActual}
-          />
-        </div>
-      )}
+      {/* La previa aparece sola al cambiar los selectores: `polite` la lee sin interrumpir
+          lo que el usuario esté haciendo. El rechazo del envío sí es `alert`. */}
+      <div aria-live="polite">
+        {!error && previaActual && previaActual.length > 0 && (
+          <div className="mt-4">
+            <PanelViolaciones
+              mensaje={`Validación previa: ${previaActual.length} ${previaActual.length === 1 ? 'regla incumplida' : 'reglas incumplidas'} con esta combinación.`}
+              violations={previaActual}
+            />
+          </div>
+        )}
 
-      {!error && previaActual?.length === 0 && (
-        <p className="mt-4 border border-emerald-700/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          Validación previa: sin problemas. La comprobación definitiva se repite al asignar,
-          sobre el equipo bloqueado en la base.
-        </p>
-      )}
+        {!error && previaActual?.length === 0 && (
+          <p className="mt-4 border border-emerald-700/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            Validación previa: sin problemas. La comprobación definitiva se repite al asignar,
+            sobre el equipo bloqueado en la base.
+          </p>
+        )}
+      </div>
 
       {error && (
-        <div className="mt-4 space-y-3">
+        <div role="alert" className="mt-4 space-y-3">
           <PanelViolaciones mensaje={error.message} violations={error.violations} />
 
           {error.canBeOverridden && !esSupervisor && (

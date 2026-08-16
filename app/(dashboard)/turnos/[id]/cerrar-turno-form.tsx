@@ -58,12 +58,12 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
         <table className={tabla.table}>
           <thead>
             <tr>
-              <th className={tabla.th}>Equipo</th>
-              <th className={tabla.th}>Operador</th>
-              <th className={`${tabla.th} text-right`}>Planificadas</th>
-              <th className={`${tabla.th} text-right`}>Reales</th>
-              <th className={tabla.th}>Impacto en el horómetro</th>
-              <th className={tabla.th}>Nota del desvío</th>
+              <th scope="col" className={tabla.th}>Equipo</th>
+              <th scope="col" className={tabla.th}>Operador</th>
+              <th scope="col" className={`${tabla.th} text-right`}>Planificadas</th>
+              <th scope="col" className={`${tabla.th} text-right`}>Reales</th>
+              <th scope="col" className={tabla.th}>Impacto en el horómetro</th>
+              <th scope="col" className={tabla.th}>Nota del desvío</th>
             </tr>
           </thead>
           <tbody>
@@ -80,6 +80,9 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                   <td className={tabla.td}>
                     <input
                       type="number"
+                      // Sin nombre accesible, un lector de pantalla anuncia doce casillas
+                      // iguales: la columna sola no dice de qué equipo es cada una.
+                      aria-label={`Horas reales de ${f.equipmentCode}`}
                       min={0.5}
                       max={24}
                       step={0.5}
@@ -101,6 +104,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                     {desvioGrande(f) ? (
                       <input
                         required
+                        aria-label={`Nota del desvío de ${f.equipmentCode}`}
                         value={notas[f.id] ?? ''}
                         onChange={(e) => setNotas({ ...notas, [f.id]: e.target.value })}
                         placeholder="Obligatoria: explique el desvío"
@@ -108,6 +112,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                       />
                     ) : (
                       <input
+                        aria-label={`Nota del desvío de ${f.equipmentCode}`}
                         value={notas[f.id] ?? ''}
                         onChange={(e) => setNotas({ ...notas, [f.id]: e.target.value })}
                         placeholder="Opcional"
@@ -123,7 +128,11 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
       </div>
 
       <div className="space-y-3 border-t border-line px-4 py-4">
-        {error && <PanelViolaciones mensaje={error.message} violations={error.violations} />}
+        {error && (
+          <div role="alert">
+            <PanelViolaciones mensaje={error.message} violations={error.violations} />
+          </div>
+        )}
 
         {faltaNota && (
           <p className="text-sm text-amber-900">

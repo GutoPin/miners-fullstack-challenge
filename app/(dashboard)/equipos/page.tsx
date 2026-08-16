@@ -25,14 +25,14 @@ export default async function EquiposPage() {
           <table className={tabla.table}>
             <thead>
               <tr>
-                <th className={tabla.th}>Código</th>
-                <th className={tabla.th}>Tipo</th>
-                <th className={tabla.th}>Estado</th>
-                <th className={tabla.th}>Uso del ciclo</th>
-                <th className={`${tabla.th} text-right`}>Horómetro</th>
-                <th className={`${tabla.th} text-right`}>Umbral</th>
-                <th className={`${tabla.th} text-right`}>Faltan</th>
-                <th className={`${tabla.th} text-right`}>Servicios</th>
+                <th scope="col" className={tabla.th}>Código</th>
+                <th scope="col" className={tabla.th}>Tipo</th>
+                <th scope="col" className={tabla.th}>Estado</th>
+                <th scope="col" className={tabla.th}>Uso del ciclo</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Horómetro</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Umbral</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Faltan</th>
+                <th scope="col" className={`${tabla.th} text-right`}>Servicios</th>
               </tr>
             </thead>
             <tbody>

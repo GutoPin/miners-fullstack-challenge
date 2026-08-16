@@ -101,13 +101,13 @@ export default async function AuditoriaPage() {
             <table className={tabla.table}>
               <thead>
                 <tr>
-                  <th className={tabla.th}>Fecha</th>
-                  <th className={tabla.th}>Equipo</th>
-                  <th className={tabla.th}>Origen</th>
-                  <th className={`${tabla.th} text-right`}>Antes</th>
-                  <th className={`${tabla.th} text-right`}>Movimiento</th>
-                  <th className={`${tabla.th} text-right`}>Después</th>
-                  <th className={tabla.th}>Nota</th>
+                  <th scope="col" className={tabla.th}>Fecha</th>
+                  <th scope="col" className={tabla.th}>Equipo</th>
+                  <th scope="col" className={tabla.th}>Origen</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Antes</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Movimiento</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Después</th>
+                  <th scope="col" className={tabla.th}>Nota</th>
                 </tr>
               </thead>
               <tbody>

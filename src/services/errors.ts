@@ -7,6 +7,7 @@
  */
 import { Prisma } from '../db/generated/client';
 import type { Violation } from '../domain/rules/violation';
+import { logJson, type Traza } from './log';
 
 export class ServiceError extends Error {
   readonly code: string;
@@ -43,34 +44,46 @@ export class ServiceError extends Error {
 }
 
 /**
- * Traduce cualquier error a la respuesta del API. Los route handlers solo serializan lo
- * que sale de aquí: un error inesperado nunca debe filtrar su mensaje interno al usuario.
+ * Traduce cualquier error a la respuesta del API y deja su línea de log. Los route handlers
+ * solo serializan lo que sale de aquí: un error inesperado nunca debe filtrar su mensaje
+ * interno al usuario, pero tampoco puede perderse.
  */
-export function toErrorResponse(error: unknown): {
+export function toErrorResponse(
+  error: unknown,
+  traza: Traza & { userId?: string },
+): {
   status: number;
   body: ReturnType<ServiceError['toResponse']>;
 } {
   if (error instanceof ServiceError) {
+    // Un rechazo de negocio no es una avería: se registra como `warn` con su código, que
+    // es lo que después permite contar cuántas asignaciones se rechazan y por qué.
+    logJson({
+      ...traza,
+      level: 'warn',
+      outcome: 'rejected',
+      code: error.code,
+      status: error.status,
+      violations: error.violations.map((v) => v.code),
+    });
+
     return { status: error.status, body: error.toResponse() };
   }
 
-  // Un error inesperado no se muestra al usuario, pero tampoco se pierde: queda en los
-  // logs del servidor como JSON, que es donde hay que ir a buscarlo.
-  console.error(
-    JSON.stringify({
-      level: 'error',
-      event: 'unhandled_error',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    }),
-  );
+  logJson({
+    ...traza,
+    level: 'error',
+    outcome: 'failed',
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
 
   return {
     status: 500,
     body: {
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'Ocurrió un error inesperado al procesar la solicitud. Intente nuevamente.',
+        message: `Ocurrió un error inesperado al procesar la solicitud. Vuelva a intentarlo; si persiste, reporte la referencia ${traza.requestId}.`,
         canBeOverridden: undefined,
         violations: [],
       },

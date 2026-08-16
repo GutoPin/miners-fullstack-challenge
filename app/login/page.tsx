@@ -66,7 +66,7 @@ export default async function LoginPage({
           </label>
 
           {error && (
-            <p className="border border-red-700/40 bg-red-50 px-3 py-2 text-sm text-red-900">
+            <p role="alert" className="border border-red-700/40 bg-red-50 px-3 py-2 text-sm text-red-900">
               Correo o contraseña incorrectos. Verifique sus datos e intente otra vez.
             </p>
           )}

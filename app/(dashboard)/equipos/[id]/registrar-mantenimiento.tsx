@@ -122,7 +122,7 @@ export function RegistrarMantenimiento({
       </p>
 
       {error && (
-        <p className="mt-3 border border-red-700/40 bg-red-50 px-3 py-2 text-sm text-red-900">
+        <p role="alert" className="mt-3 border border-red-700/40 bg-red-50 px-3 py-2 text-sm text-red-900">
           {error}
         </p>
       )}

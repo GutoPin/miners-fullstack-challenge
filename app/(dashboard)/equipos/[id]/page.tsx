@@ -96,12 +96,12 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
               <table className={tabla.table}>
                 <thead>
                   <tr>
-                    <th className={tabla.th}>Fecha</th>
-                    <th className={`${tabla.th} text-right`}>Horómetro</th>
-                    <th className={`${tabla.th} text-right`}>Umbral</th>
-                    <th className={`${tabla.th} text-right`}>Atraso</th>
-                    <th className={`${tabla.th} text-right`}>Nuevo umbral</th>
-                    <th className={tabla.th}>Responsable</th>
+                    <th scope="col" className={tabla.th}>Fecha</th>
+                    <th scope="col" className={`${tabla.th} text-right`}>Horómetro</th>
+                    <th scope="col" className={`${tabla.th} text-right`}>Umbral</th>
+                    <th scope="col" className={`${tabla.th} text-right`}>Atraso</th>
+                    <th scope="col" className={`${tabla.th} text-right`}>Nuevo umbral</th>
+                    <th scope="col" className={tabla.th}>Responsable</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -155,12 +155,12 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
             <table className={tabla.table}>
               <thead>
                 <tr>
-                  <th className={tabla.th}>Fecha</th>
-                  <th className={tabla.th}>Origen</th>
-                  <th className={`${tabla.th} text-right`}>Antes</th>
-                  <th className={`${tabla.th} text-right`}>Movimiento</th>
-                  <th className={`${tabla.th} text-right`}>Después</th>
-                  <th className={tabla.th}>Nota</th>
+                  <th scope="col" className={tabla.th}>Fecha</th>
+                  <th scope="col" className={tabla.th}>Origen</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Antes</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Movimiento</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Después</th>
+                  <th scope="col" className={tabla.th}>Nota</th>
                 </tr>
               </thead>
               <tbody>

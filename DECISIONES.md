@@ -213,6 +213,13 @@ hay más de una instancia, que es exactamente lo que pasa en un despliegue serve
   así que hay login con tres roles (`SUPERVISOR`, `PLANNER`, `VIEWER`). No hay recuperación
   de contraseña ni gestión de usuarios: no aporta al problema.
 - **Zona horaria `America/Lima`, almacenamiento en UTC**, fecha del turno como `date` pura.
+- **Un solo lugar donde nace el error, y una línea de log por resultado.** Todas las
+  respuestas de error salen de `toErrorResponse()`, así que la forma
+  `{ error: { code, message, violations } }` no depende de que cada endpoint se acuerde. Ahí
+  mismo se emite una línea JSON con el `requestId`, el usuario y los códigos de violación, y
+  ese identificador vuelve en la cabecera `x-request-id`: con el número que le aparece al
+  usuario se encuentra la línea exacta. Los rechazos de negocio se registran como `warn` y
+  no como `error`, porque son funcionamiento normal, no averías.
 
 ---
 

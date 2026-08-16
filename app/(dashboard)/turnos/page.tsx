@@ -116,7 +116,7 @@ export default async function TurnosPage({
           </form>
 
           {error && (
-            <p className="border-t border-red-700/40 bg-red-50 px-4 py-3 text-sm text-red-900">
+            <p role="alert" className="border-t border-red-700/40 bg-red-50 px-4 py-3 text-sm text-red-900">
               {error}
             </p>
           )}
@@ -131,11 +131,11 @@ export default async function TurnosPage({
             <table className={tabla.table}>
               <thead>
                 <tr>
-                  <th className={tabla.th}>Fecha</th>
-                  <th className={tabla.th}>Jornada</th>
-                  <th className={`${tabla.th} text-right`}>Duración</th>
-                  <th className={tabla.th}>Estado</th>
-                  <th className={tabla.th}>Asignaciones</th>
+                  <th scope="col" className={tabla.th}>Fecha</th>
+                  <th scope="col" className={tabla.th}>Jornada</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Duración</th>
+                  <th scope="col" className={tabla.th}>Estado</th>
+                  <th scope="col" className={tabla.th}>Asignaciones</th>
                 </tr>
               </thead>
               <tbody>

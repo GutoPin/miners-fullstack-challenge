@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { errorResponse, parseBody, requireRole } from '@/app/api/http';
+import { errorResponse, logJson, parseBody, requireRole, traza } from '@/app/api/http';
 import { registerMaintenance } from '@/src/services/register-maintenance';
 
 export const dynamic = 'force-dynamic';
@@ -14,14 +14,28 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const t = traza(request, 'maintenance.register');
+  let userId: string | undefined;
+
   try {
-    const { id: userId } = await requireRole('PLANNER', 'SUPERVISOR');
+    ({ id: userId } = await requireRole('PLANNER', 'SUPERVISOR'));
     const input = parseBody(schema, await request.json());
 
     const result = await registerMaintenance({ ...input, userId });
 
+    logJson({
+      ...t,
+      userId,
+      outcome: 'registered',
+      equipmentId: input.equipmentId,
+      hoursAtService: input.hoursAtService,
+      nextThreshold: result.nextThreshold,
+      overdue: result.overdue,
+      reAnchored: result.reAnchored,
+    });
+
     return Response.json(result, { status: 201 });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, { ...t, userId });
   }
 }

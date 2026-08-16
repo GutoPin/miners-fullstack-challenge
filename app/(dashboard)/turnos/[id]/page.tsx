@@ -72,13 +72,13 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
             <table className={tabla.table}>
               <thead>
                 <tr>
-                  <th className={tabla.th}>Equipo</th>
-                  <th className={tabla.th}>Operador</th>
-                  <th className={tabla.th}>Estado</th>
-                  <th className={`${tabla.th} text-right`}>Planificadas</th>
-                  <th className={`${tabla.th} text-right`}>Reales</th>
-                  <th className={tabla.th}>Observaciones</th>
-                  {planificado && puedeOperar && <th className={tabla.th}></th>}
+                  <th scope="col" className={tabla.th}>Equipo</th>
+                  <th scope="col" className={tabla.th}>Operador</th>
+                  <th scope="col" className={tabla.th}>Estado</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Planificadas</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Reales</th>
+                  <th scope="col" className={tabla.th}>Observaciones</th>
+                  {planificado && puedeOperar && <th scope="col" className={tabla.th}></th>}
                 </tr>
               </thead>
               <tbody>

@@ -29,11 +29,11 @@ export default async function OperadoresPage() {
           <table className={tabla.table}>
             <thead>
               <tr>
-                <th className={tabla.th}>Código</th>
-                <th className={tabla.th}>Operador</th>
-                <th className={tabla.th}>Documento</th>
-                <th className={tabla.th}>Situación</th>
-                <th className={tabla.th}>Certificaciones</th>
+                <th scope="col" className={tabla.th}>Código</th>
+                <th scope="col" className={tabla.th}>Operador</th>
+                <th scope="col" className={tabla.th}>Documento</th>
+                <th scope="col" className={tabla.th}>Situación</th>
+                <th scope="col" className={tabla.th}>Certificaciones</th>
               </tr>
             </thead>
             <tbody>
