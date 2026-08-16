@@ -12,5 +12,39 @@ services:
       test: ["CMD-SHELL", "pg_isready -U mineops"]
       interval: 5s
       retries: 10
+
+  # Trabajo de un solo uso: prepara la base y termina. Usa la etapa `builder`, que sí tiene
+  # el código fuente y la CLI, para que la imagen que se publica no cargue con ellos.
+  # Ambos comandos son idempotentes: repetir `up` no duplica datos.
+  migrate:
+    build:
+      context: .
+      target: builder
+    container_name: mineops-migrate
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://mineops:mineops@db:5432/mineops
+      MIGRATE_DATABASE_URL: postgresql://mineops:mineops@db:5432/mineops
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed"
+    restart: "no"
+
+  app:
+    build: .
+    container_name: mineops-app
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      # Sin pooler de por medio, las dos cadenas son la misma. En Neon no lo son:
+      # DATABASE_URL apunta al pooler y MIGRATE_DATABASE_URL a la conexión directa.
+      DATABASE_URL: postgresql://mineops:mineops@db:5432/mineops
+      MIGRATE_DATABASE_URL: postgresql://mineops:mineops@db:5432/mineops
+      AUTH_SECRET: secreto-solo-para-desarrollo-local
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      TZ: America/Lima
+    ports: ["3000:3000"]
+
 volumes:
   pgdata:

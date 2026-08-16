@@ -60,7 +60,19 @@ El porqué de cada elección está en [`DECISIONES.md`](./DECISIONES.md).
 
 ## Levantarlo en local
 
-### Puesta en marcha
+### Opción rápida: todo en Docker
+
+Levanta Postgres, aplica las migraciones, siembra los datos de ejemplo y arranca la app:
+
+```bash
+docker compose up --build        # http://localhost:3000
+```
+
+Son tres servicios: `db` (Postgres 17), `migrate` (trabajo de un solo uso que migra y
+siembra; termina y se apaga) y `app` (la imagen `standalone` de Next). Reiniciar no duplica
+nada: `migrate deploy` y el seed son idempotentes.
+
+### Opción con Node local
 
 ```bash
 cp .env.example .env             # completar AUTH_SECRET y las dos cadenas de conexión
@@ -117,6 +129,13 @@ El seed deja el sistema listo para probar sin crear nada a mano:
 - **App:** Vercel (plan Hobby, gratis). Cada push a `main` despliega; `prisma migrate deploy` corre en el build.
 - **Base de datos:** PostgreSQL serverless en Neon (plan Free), rama `main` para producción.
 - **Seed de producción:** `DATABASE_URL=<url-de-neon> npm run db:seed` desde local, una sola vez.
+- **CI:** GitHub Actions corre lint, typecheck y las dos suites de tests —los de integración
+  contra un Postgres de servicio— en cada push y cada PR.
+- **Keep-alive:** un workflow programado consulta `/api/health` cada 6 h para que Neon no
+  esté frío cuando alguien abra la demo.
+- **Diagnóstico:** cada rechazo y cada error del API se registra como una línea JSON con
+  `requestId`, y ese mismo identificador vuelve en la cabecera `x-request-id` de la
+  respuesta: con el número que ve el usuario se encuentra la línea exacta en los logs.
 
 ---
 
