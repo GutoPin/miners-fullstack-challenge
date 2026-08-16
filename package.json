@@ -7,7 +7,7 @@
     "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "build:app": "next build",
     "test": "vitest run tests/unit",
     "test:int": "dotenv -e .env -- vitest run tests/integration --no-file-parallelism",
