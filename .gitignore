@@ -47,5 +47,7 @@ next-env.d.ts
 .claude
 .windsurf
 src/db/generated/
+
+# Documentación de trabajo interna: no se publica
 SETUP.md
 /docs
