@@ -35,8 +35,7 @@ export function RegistrarMantenimiento({
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  // Mismo cálculo que `nextThreshold()` en el dominio, solo para anticipar el resultado.
-  // La cifra que vale es la que devuelve el servidor y se muestra abajo al confirmar.
+  // mirrors nextThreshold() to preview the result; the server's number is the real one
   const previsto = threshold + interval;
   const atraso = Math.max(0, hoursAtService - threshold);
 

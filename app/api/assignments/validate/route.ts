@@ -13,13 +13,12 @@ const schema = z.object({
 });
 
 /**
- * Validación previa: dice qué pasaría, sin escribir nada. Corre el **mismo** motor de
- * reglas que la creación, así que la interfaz no tiene su propia versión de las reglas.
- * No sustituye a la validación de `POST /api/assignments`: entre esta consulta y el envío
- * el estado puede cambiar, y la garantía se toma con la fila bloqueada.
+ * Preview: says what would happen without writing anything. Runs the same rule engine as
+ * creation, so the UI never carries its own copy of the rules. It does not replace the
+ * check in `POST /api/assignments`, which runs again over the locked row.
  */
 export async function POST(request: Request) {
-  // Solo lee: no deja línea de log en el caso feliz, o el log se llenaría de tecleo.
+  // read only: no log line on success, or the log fills with keystrokes
   const t = traza(request, 'assignment.validate');
 
   try {

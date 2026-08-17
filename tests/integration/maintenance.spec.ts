@@ -45,7 +45,7 @@ describe('registerMaintenance', () => {
     const hoy = await crearTurno(0, 'DAY', 10);
     await createAssignment({ shiftId: hoy.id, equipmentId, operatorId, userId, plannedHours: 10 });
 
-    // Un turno futuro del mismo equipo, todavía sano.
+    // a future shift for the same equipment, still healthy
     const futuro = await crearTurno(3);
     const operadorB = await crearOperador(m, '-B');
     await certificar(operadorB.id, typeId);
@@ -71,7 +71,7 @@ describe('registerMaintenance', () => {
     expect(antes.status).toBe('BLOCKED');
     expect(Number(antes.currentHours)).toBe(250);
 
-    // Entra al taller con 30 h de atraso: el siguiente umbral es 500 (250 + 250), no 530.
+    // arrives 30 h overdue: the next threshold is 500 (250 + 250), not 530
     const resultado = await registerMaintenance({
       equipmentId,
       userId,
@@ -92,7 +92,7 @@ describe('registerMaintenance', () => {
   });
 
   it('la diferencia entre el saldo y la lectura del taller deja su asiento', async () => {
-    // El equipo estaba en 250 h y el taller informó 280: 30 h que también son movimiento.
+    // the balance was 250 h and the workshop reported 280: those 30 h are movement too
     const ajuste = await prisma.hourmeterEntry.findFirst({
       where: { equipmentId, source: 'MAINTENANCE' },
       orderBy: { createdAt: 'desc' },

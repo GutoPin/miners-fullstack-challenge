@@ -3,11 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 
 import './globals.css';
 
-/*
- * IBM Plex: nació para documentación técnica e interfaces de ingeniería. Tiene versión
- * mono del mismo diseño, así que los códigos de equipo y los horómetros conviven con el
- * texto sin parecer pegados de otra familia.
- */
+// ibm plex: matching sans and mono, so equipment codes and hourmeters sit in the same design
 const plexSans = IBM_Plex_Sans({
   variable: '--font-plex-sans',
   subsets: ['latin'],

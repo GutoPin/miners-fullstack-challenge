@@ -1,3 +1,4 @@
+// prisma 7 requires a driver adapter; the singleton keeps dev reloads from opening new pools
 import { PrismaClient } from './generated/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 

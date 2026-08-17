@@ -1,31 +1,30 @@
 /**
- * Política de umbrales de mantenimiento (regla 2 y docs/MODELO-DATOS.md §4).
+ * Maintenance threshold policy (rule 2).
  *
- * El ciclo siguiente se ancla al **umbral anterior**, no al horómetro real del servicio:
- * si se contara desde el horómetro real, cada atraso correría la ventana hacia adelante y
- * al cabo de un año la unidad habría recibido menos servicios de los que exige el
- * fabricante. Anclando, el atraso es un evento aislado y no una deuda que se acumula.
+ * The next cycle is anchored to the previous threshold, not to the hourmeter reading at
+ * service time. Counting from the real reading would push the window forward on every
+ * delay, so a year of small delays would silently cost the machine whole services.
+ * Anchoring keeps a delay an isolated, measurable event instead of accumulated debt.
  */
 
 export interface NextThreshold {
-  /** Umbral absoluto de horómetro al que el equipo se vuelve a bloquear. */
+  /** absolute hourmeter value that blocks the equipment again */
   next: number;
-  /** Horas de más con las que llegó al taller (0 si se cumplió a tiempo). */
+  /** hours past the threshold on arrival, 0 when serviced on time */
   overdue: number;
-  /** true si el atraso se comió un ciclo entero y hubo que saltar al siguiente múltiplo. */
+  /** true when the delay ate a whole cycle and the anchor had to skip forward */
   reAnchored: boolean;
 }
 
 export function nextThreshold(
-  previousThreshold: number, // umbral que se debía cumplir (p.ej. 250)
-  hoursAtService: number, // horómetro real del servicio (p.ej. 280)
+  previousThreshold: number, // threshold that was due, e.g. 250
+  hoursAtService: number, // real hourmeter at service, e.g. 280
   interval: number, // 250
 ): NextThreshold {
   const overdue = Math.max(0, hoursAtService - previousThreshold);
-  let next = previousThreshold + interval; // 500, no 530
+  let next = previousThreshold + interval; // 500, not 530
 
-  // Salvaguarda: si el atraso se comió un ciclo entero, re-anclar al
-  // siguiente múltiplo por encima del horómetro real para no nacer bloqueado.
+  // guard: a delay past a full cycle would leave the workshop already blocked
   const reAnchored = next <= hoursAtService;
   if (reAnchored) {
     next =

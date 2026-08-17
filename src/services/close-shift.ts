@@ -1,9 +1,8 @@
 /**
- * Cerrar un turno (regla 10, `docs/REGLAS-NEGOCIO.md` §3).
+ * Close a shift (rule 10).
  *
- * Una sola transacción hace todo: asiento en el ledger, saldo del horómetro, recálculo del
- * estado del equipo y riesgo de las asignaciones futuras. Si algo falla, no queda un
- * horómetro movido sin su asiento.
+ * One transaction does all of it: ledger entry, hourmeter balance, equipment status and
+ * risk on future assignments. If anything fails, no hourmeter moves without its entry.
  */
 import { Prisma } from '../db/generated/client';
 import { formatIsoDate, toIsoDate } from './dates';
@@ -14,13 +13,13 @@ import { serializable } from './transaction';
 export interface CloseShiftInput {
   shiftId: string;
   userId: string;
-  /** Horas realmente trabajadas, por `assignmentId`. Sin dato, se asumen las planificadas. */
+  /** hours actually worked, by `assignmentId`; defaults to the planned hours */
   actualHours?: Record<string, number>;
-  /** Justificación del desvío, por `assignmentId`. Obligatoria si el desvío es grande. */
+  /** variance justification, by `assignmentId`; required when the variance is large */
   notes?: Record<string, string>;
 }
 
-/** Desvío a partir del cual la nota deja de ser opcional (REGLAS-NEGOCIO §3). */
+/** variance above which the note stops being optional */
 const DESVIO_HORAS = 2;
 const DESVIO_RELATIVO = 0.25;
 
@@ -39,8 +38,7 @@ export async function closeShift(input: CloseShiftInput) {
       });
     }
 
-    // El cierre es idempotente: un turno cerrado no se vuelve a cerrar ni vuelve a sumar
-    // horas al horómetro.
+    // idempotent: a closed shift never adds hours twice
     if (shift.status !== 'PLANNED') {
       throw new ServiceError({
         code: 'SHIFT_NOT_PLANNED',
@@ -49,8 +47,7 @@ export async function closeShift(input: CloseShiftInput) {
       });
     }
 
-    // Una asignación en riesgo no se cierra con horas: hay que reasignar el equipo o
-    // cancelarla antes (DECISIONES §2.1). El sistema no decide por la operación.
+    // an at-risk assignment must be reassigned or cancelled first: the system does not decide
     const enRiesgo = shift.assignments.filter((a) => a.status === 'AT_RISK');
     if (enRiesgo.length > 0) {
       const detalle = enRiesgo
@@ -77,8 +74,7 @@ export async function closeShift(input: CloseShiftInput) {
       }
     }
 
-    // 1. Validar horas y notas antes de escribir nada: si el cierre se cae a la mitad,
-    //    el mensaje debe llegar antes de haber movido ningún horómetro.
+    // 1. validate hours and notes before writing anything
     const cierres = computables.map((assignment) => {
       const planned = Number(assignment.plannedHours);
       const hours = input.actualHours?.[assignment.id] ?? planned;
@@ -108,9 +104,7 @@ export async function closeShift(input: CloseShiftInput) {
       return { assignment, hours, note };
     });
 
-    // 2. Bloquear todos los equipos del turno de una vez y en orden determinista: dos
-    //    cierres simultáneos que compartan equipos se serializan en vez de trabarse
-    //    esperándose mutuamente.
+    // 2. lock every equipment at once, in a deterministic order, so two closes never deadlock
     const equipmentIds = [...new Set(cierres.map((c) => c.assignment.equipmentId))].sort();
 
     if (equipmentIds.length > 0) {
@@ -144,7 +138,7 @@ export async function closeShift(input: CloseShiftInput) {
       const before = Number(equipment.currentHours);
       const after = before + hours;
 
-      // Nada toca el horómetro sin escribir su asiento, en la misma transacción.
+      // nothing moves the hourmeter without its ledger entry, in the same transaction
       await tx.hourmeterEntry.create({
         data: {
           equipmentId: equipment.id,
@@ -157,7 +151,7 @@ export async function closeShift(input: CloseShiftInput) {
         },
       });
 
-      // Regla 10 disparando la regla 2: cruzar el umbral bloquea al equipo, aquí mismo.
+      // rule 10 triggering rule 2: crossing the threshold blocks the equipment right here
       const cruzaUmbral = after >= Number(equipment.nextMaintenanceHours);
       const status = cruzaUmbral ? 'BLOCKED' : equipment.status;
 

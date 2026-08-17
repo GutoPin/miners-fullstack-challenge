@@ -5,10 +5,7 @@ import { useState } from 'react';
 
 import { postJson } from '@/src/components/api';
 
-/**
- * Cancelar libera el cupo del turno sin borrar el histórico. Es una de las tres salidas
- * para una asignación en riesgo; la otra, reasignar, son estos dos pasos: cancelar y crear.
- */
+/** Cancelling frees the slot without erasing history; reassigning is cancel plus create. */
 export function CancelarAsignacion({ assignmentId, etiqueta }: { assignmentId: string; etiqueta: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);

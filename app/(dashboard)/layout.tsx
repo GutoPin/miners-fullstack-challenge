@@ -23,8 +23,7 @@ export default async function DashboardLayout({ children }: LayoutProps<'/'>) {
 
   return (
     <div className="lg:grid lg:min-h-svh lg:grid-cols-[15rem_1fr]">
-      {/* Con seis secciones y tablas largas, tabular hasta el contenido cansa. Solo se ve
-          al enfocarlo con el teclado. */}
+      {/* visible only on keyboard focus */}
       <a
         href="#contenido"
         className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:bg-ink focus:px-3 focus:py-2 focus:text-sm focus:text-white"

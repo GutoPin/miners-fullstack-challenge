@@ -1,10 +1,9 @@
 /**
- * Cliente del API para los formularios del navegador.
+ * API client for the browser forms.
  *
- * La UI llama a los mismos endpoints que probaría un `curl`: no hay una segunda
- * implementación de las reglas en el cliente. Devuelve el error en vez de lanzarlo, porque
- * un rechazo con violaciones **no es una excepción**: es la respuesta esperada y hay que
- * dibujarla.
+ * The UI calls the same endpoints `curl` would, so the rules have no second implementation.
+ * Errors are returned rather than thrown: a rejection with violations is not an exception,
+ * it is the expected answer and it has to be drawn.
  */
 import type { Violation } from '../domain/rules/violation';
 
@@ -27,8 +26,7 @@ export async function postJson<T>(url: string, body?: unknown): Promise<ApiResul
       body: JSON.stringify(body ?? {}),
     });
   } catch {
-    // Sin esto, una conexión caída deja el botón en "Enviando…" para siempre: la promesa
-    // se rechaza y el formulario nunca se entera. En faena la conexión se cae.
+    // without this a dropped connection leaves the button stuck on "sending"
     return {
       ok: false,
       error: {

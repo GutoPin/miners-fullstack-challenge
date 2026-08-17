@@ -1,8 +1,8 @@
 /**
- * Insumo de la vista de proyección a 7 días (regla 12).
+ * Feeds the 7-day projection view (rule 12).
  *
- * El SQL solo trae los datos; quién cruza el umbral y cuándo lo decide la simulación del
- * dominio (`docs/MODELO-DATOS.md` §5). Lo usan el endpoint y, más adelante, la pantalla.
+ * SQL only fetches rows; who crosses the threshold and when is decided by the domain
+ * simulation.
  */
 import { prisma } from '../db/prisma';
 import { projectMaintenance, type ProjectionResult } from '../domain/projection';
@@ -16,7 +16,7 @@ export interface ProjectionRow {
   status: string;
   currentHours: number;
   nextMaintenanceHours: number;
-  /** Turnos ya programados que alimentaron la simulación. */
+  /** scheduled shifts that fed the simulation */
   plannedShifts: number;
   projection: ProjectionResult;
 }
@@ -72,8 +72,7 @@ export async function getProjection(days = 7, today = new Date()): Promise<Proje
     };
   });
 
-  // Ordenado por urgencia: lo ya bloqueado primero, después lo que cruza antes, y al final
-  // lo sano ordenado por el margen que le queda.
+  // by urgency: blocked first, then whatever crosses soonest, then by remaining margin
   return filas.sort((a, b) => urgencia(a) - urgencia(b) || desempate(a, b));
 }
 

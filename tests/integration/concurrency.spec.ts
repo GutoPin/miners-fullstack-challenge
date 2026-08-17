@@ -1,9 +1,8 @@
 /**
- * La prueba que responde la decisión abierta 6 del enunciado: dos supervisores asignando el
- * mismo equipo al mismo turno **a la vez**.
+ * Two supervisors assigning the same equipment to the same shift at the same time.
  *
- * No comprueba que "haya una transacción": comprueba el resultado observable — entra una
- * sola asignación y la base nunca queda inconsistente— que es lo único que importa.
+ * It does not assert that a transaction exists; it asserts the observable outcome — exactly
+ * one assignment lands and the database never ends up inconsistent.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -41,7 +40,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-/** El perdedor puede llegar por la regla de dominio o por el índice único: ambos valen. */
+/** the loser may come from the domain rule or from the unique index; both are valid */
 function rechazaPorCupoTomado(reason: unknown): boolean {
   if (!(reason instanceof ServiceError)) return false;
 

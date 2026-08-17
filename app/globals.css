@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
-/*
- * Consola de operaciones, no landing page: densidad alta, jerarquía por peso y tamaño,
- * bordes de un pixel en vez de sombras. Sin dark mode ni animaciones a propósito
- * (CLAUDE.md: no se evalúan y cuestan tiempo).
- */
+/* operations console, not a landing page: dense, hairline borders, no shadows or animation */
 @theme inline {
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
@@ -14,7 +10,7 @@
   --color-ink: #16171a;
   --color-muted: #5c6068;
   --color-line: #d9d9d4;
-  /* Ocre de señalización minera: es el único color de marca, y se usa con cuentagotas. */
+  /* the only brand colour, used sparingly */
   --color-accent: #b45309;
 }
 
@@ -25,12 +21,12 @@ html {
 
 body {
   font-family: var(--font-sans);
-  /* Las columnas de horómetro tienen que alinearse dígito con dígito. */
+  /* hourmeter columns must line up digit by digit */
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Rótulos de sección y encabezados de tabla: versalitas espaciadas, no negritas grandes. */
+/* section labels and table headers */
 .rotulo {
   font-size: 0.6875rem;
   font-weight: 600;
@@ -39,7 +35,7 @@ body {
   color: var(--color-muted);
 }
 
-/* Foco visible en todo lo interactivo: es accesibilidad, no decoración. */
+/* visible focus on everything interactive */
 :where(a, button, input, select, textarea):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;

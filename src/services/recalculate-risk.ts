@@ -1,30 +1,21 @@
 /**
- * Riesgo sobrevenido sobre asignaciones ya programadas (`docs/REGLAS-NEGOCIO.md` §6 y
- * `DECISIONES.md` §2.1).
+ * Risk that appears on already scheduled assignments.
  *
- * Cuando un equipo se bloquea, sus asignaciones futuras **no se cancelan**: pasan a
- * `AT_RISK` con alerta crítica y alguien decide. Ambas funciones se ejecutan dentro de la
- * transacción que produjo el cambio de estado, nunca en un job aparte: un job puede
- * reparar, no decidir.
+ * When equipment is blocked its future assignments are not cancelled: they turn `AT_RISK`
+ * with a critical alert and a person decides. These run inside the transaction that caused
+ * the state change, never in a separate job — a job may repair, not decide.
  */
 import type { Prisma } from '../db/generated/client';
 import { validateAssignment } from '../domain/rules/assignment-rules';
 import { formatIsoDate, toIsoDate, toOperationalDate } from './dates';
 
-/**
- * Prefijo del `riskReason` escrito por un bloqueo de equipo. Sirve para reconocer después
- * cuáles asignaciones puede recuperar el mantenimiento y cuáles quedaron en riesgo por
- * otro motivo (certificación vencida, excepción forzada), que ese mantenimiento no arregla.
- */
+/** riskReason prefix: marks which assignments a maintenance can later recover */
 export const RIESGO_POR_BLOQUEO = 'Equipo bloqueado por mantenimiento';
 
-/** Mismo mecanismo para el otro riesgo sobrevenido: la certificación que deja de cubrir. */
+/** same mechanism for the other cause, a certification that stops covering */
 export const RIESGO_POR_CERTIFICACION = 'Certificación sin cobertura';
 
-/**
- * Marca `AT_RISK` las asignaciones del equipo en turnos planificados posteriores a `after`
- * y levanta una alerta crítica por cada una.
- */
+/** flags the equipment's assignments in planned shifts after `after`, one alert each */
 export async function flagFutureAssignmentsAtRisk(
   tx: Prisma.TransactionClient,
   equipmentId: string,
@@ -62,12 +53,9 @@ export async function flagFutureAssignmentsAtRisk(
 }
 
 /**
- * Devuelve a `ACTIVE` las asignaciones que este equipo dejó en riesgo al bloquearse y
- * resuelve sus alertas.
- *
- * Deja fuera dos casos a propósito: las que tienen `AssignmentOverride` (nacieron forzadas
- * y deben seguir marcadas como tales) y las que quedaron en riesgo por otro motivo, que un
- * mantenimiento no resuelve.
+ * Returns to `ACTIVE` the assignments this equipment put at risk, and resolves their alerts.
+ * Two cases stay out on purpose: forced ones, which must remain marked, and those at risk
+ * for a different reason, which a maintenance does not fix.
  */
 export async function clearEquipmentRisk(
   tx: Prisma.TransactionClient,
@@ -99,7 +87,7 @@ export async function clearEquipmentRisk(
     });
   }
 
-  // El equipo ya no está por cruzar su umbral: la alerta de proyección deja de aplicar.
+  // no longer about to cross its threshold, so the projection alert stops applying
   await tx.alert.updateMany({
     where: { equipmentId, type: 'MAINTENANCE_DUE_SOON', resolvedAt: null },
     data: { resolvedAt },
@@ -109,12 +97,9 @@ export async function clearEquipmentRisk(
 }
 
 /**
- * Recalcula el riesgo de los turnos futuros de un operador cuando cambian sus
- * certificaciones (`DECISIONES.md` §2.5): la alerta tiene que aparecer el día que se genera
- * el problema, no el día del turno.
- *
- * Se llama al crear o renovar una certificación, y funciona en los dos sentidos: marca en
- * riesgo lo que quedó sin cobertura y recupera lo que una renovación volvió a cubrir.
+ * Recomputes risk on an operator's future shifts when their certifications change, so the
+ * alert appears the day the problem is created and not the day of the shift. Works both
+ * ways: flags what lost coverage and recovers what a renewal covered again.
  */
 export async function recalculateOperatorRisk(
   tx: Prisma.TransactionClient,
@@ -149,9 +134,8 @@ export async function recalculateOperatorRisk(
   const recuperadas: string[] = [];
 
   for (const a of futuras) {
-    // Se reusa el mismo motor que valida la creación: si el riesgo y la validación
-    // divergieran, una de las dos estaría mintiendo. Va sin `activeAssignments` porque aquí
-    // solo interesan las reglas de certificación; la unicidad ya la garantiza la base.
+    // same engine that validates creation; no activeAssignments because only certification
+    // rules matter here and uniqueness is already guaranteed by the database
     const violations = validateAssignment({
       shift: {
         id: a.shift.id,
@@ -175,7 +159,7 @@ export async function recalculateOperatorRisk(
       activeAssignments: [],
     });
 
-    // Vencer *a mitad* del turno es WARNING, no riesgo: se permite y se avisa (§2.5).
+    // expiring mid-shift is a warning, not a risk: allowed and reported
     const sinCobertura = violations.some(
       (v) => v.code === 'CERTIFICATION_EXPIRED' || v.code === 'OPERATOR_NOT_CERTIFIED',
     );
@@ -205,7 +189,7 @@ export async function recalculateOperatorRisk(
       continue;
     }
 
-    // Una asignación forzada nació AT_RISK y debe seguir marcada como tal.
+    // a forced assignment was born AT_RISK and stays that way
     const recuperable =
       !sinCobertura &&
       a.status === 'AT_RISK' &&

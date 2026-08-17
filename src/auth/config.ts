@@ -1,9 +1,9 @@
 /**
- * Configuración de Auth.js **sin acceso a base de datos**.
+ * Auth.js configuration without database access.
  *
- * El middleware corre en el runtime de Edge, donde no hay Prisma ni bcrypt. Por eso la
- * parte que solo decide "¿hay sesión?" vive aquí, y el proveedor de credenciales —que sí
- * consulta la base— vive en `index.ts`, que solo se importa desde el servidor.
+ * The proxy runs on the edge runtime, where Prisma and bcrypt do not exist, so the part
+ * that only answers "is there a session?" lives here and the credentials provider lives in
+ * `index.ts`, imported from the server only.
  */
 import type { DefaultSession, NextAuthConfig } from 'next-auth';
 
@@ -21,8 +21,7 @@ declare module 'next-auth' {
 
 export const authConfig = {
   pages: { signIn: '/login' },
-  // Sesión en JWT: sin tabla de sesiones que mantener y sin consulta por request. La
-  // identidad se necesita para firmar excepciones, no para guardar estado.
+  // jwt session: no session table to keep, no query per request
   session: { strategy: 'jwt' },
   callbacks: {
     authorized({ auth }) {
@@ -34,8 +33,7 @@ export const authConfig = {
     },
     session({ session, token }) {
       if (token.sub) session.user.id = token.sub;
-      // El JWT es un mapa de claves desconocidas; el rol lo puso el callback de arriba y
-      // es el único lugar donde se escribe, así que la aserción no esconde nada.
+      // the callback above is the only place that writes this claim
       session.user.role = token.role as Role;
       return session;
     },

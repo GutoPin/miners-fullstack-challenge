@@ -1,20 +1,17 @@
 /**
- * Transacción `Serializable` con un reintento.
+ * `Serializable` transaction with a single retry.
  *
- * Con este aislamiento, dos escrituras que compiten por lo mismo no terminan siempre en
- * violación de unicidad: PostgreSQL puede abortar una con un fallo de serialización
- * (P2034) *antes* de que el índice único llegue a dispararse. Ese error no es del usuario
- * y no se le muestra: se reintenta una vez.
- *
- * El reintento casi siempre mejora el mensaje. En el segundo intento el ganador ya está
- * visible, así que la validación del dominio explica el conflicto en lenguaje de negocio
- * ("CAM-001 ya está asignado a Juan Pérez en este turno") en vez de pedir que reintente.
+ * Under this isolation level two competing writes do not always end in a unique violation:
+ * PostgreSQL may abort one with a serialization failure (P2034) before the index fires.
+ * That is not the user's error, so it is retried once — and the retry also improves the
+ * message, because by then the winner is visible and domain validation can explain the
+ * conflict in business terms instead of asking to try again.
  */
 import { Prisma } from '../db/generated/client';
 import { prisma } from '../db/prisma';
 import { ServiceError } from './errors';
 
-/** "Transaction failed due to a write conflict or a deadlock". */
+/** "Transaction failed due to a write conflict or a deadlock" */
 const CONFLICTO_DE_ESCRITURA = 'P2034';
 
 export async function serializable<T>(
@@ -26,7 +23,7 @@ export async function serializable<T>(
     if (!esConflictoDeEscritura(error)) throw error;
   }
 
-  // Un solo reintento, no un bucle: si vuelve a chocar, el problema no es la carrera.
+  // one retry, not a loop: a second clash is not a race any more
   try {
     return await prisma.$transaction(fn, { isolationLevel: 'Serializable' });
   } catch (error) {
@@ -46,9 +43,8 @@ function esConflictoDeEscritura(error: unknown): boolean {
     return error.code === CONFLICTO_DE_ESCRITURA;
   }
 
-  // Bajo contención alta el fallo no siempre llega como error de Prisma: el driver lo
-  // reporta antes, como `DriverAdapterError: TransactionWriteConflict`. Es el mismo
-  // suceso (SQLSTATE 40001) y merece la misma respuesta, no un 500.
+  // under heavy contention the driver reports it first as DriverAdapterError:
+  // TransactionWriteConflict — same event (SQLSTATE 40001), same response, not a 500
   const texto = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 
   return /TransactionWriteConflict|could not serialize|deadlock detected|40001/i.test(texto);

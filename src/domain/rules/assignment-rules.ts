@@ -1,19 +1,13 @@
 /**
- * Motor de reglas de asignación (reglas 6, 7, 8, 9 y 11 del enunciado).
+ * Assignment rule engine (rules 6, 7, 8, 9 and 11).
  *
- * TypeScript puro: recibe un snapshot plano y devuelve decisiones. No conoce Prisma,
- * no consulta nada y **no lee el reloj**: la vigencia de una certificación se evalúa
- * contra la fecha del turno, nunca contra `new Date()`.
+ * Plain TypeScript: takes a flat snapshot, returns decisions. No Prisma, no queries and
+ * no clock — certification validity is checked against the shift date, never `new Date()`.
  */
 import type { AssignmentContext, IsoDate, ShiftSnapshot } from '../types';
 import { SEVERITY_BY_CODE, type Violation, type ViolationCode } from './violation';
 
-/**
- * Evalúa todas las reglas y devuelve todas las violaciones (regla 11).
- *
- * No hay early return: cortar en la primera violación obligaría al planificador a
- * descubrir los problemas de a uno, arreglar, reintentar y volver a fallar.
- */
+/** every rule, every violation: no early return (rule 11) */
 export function validateAssignment(input: AssignmentContext): Violation[] {
   return [
     ...shiftRules(input),
@@ -24,11 +18,7 @@ export function validateAssignment(input: AssignmentContext): Violation[] {
   ];
 }
 
-/**
- * Una asignación rechazada se puede forzar solo si todo lo que la bloquea es
- * `OVERRIDABLE`. Una sola violación `HARD` deja el rechazo firme (§5): el override
- * se ignora. Los `WARNING` no bloquean, así que no cuentan para ninguno de los dos lados.
- */
+/** overridable only if nothing blocking is HARD; warnings don't count either way */
 export function canBeOverridden(violations: Violation[]): boolean {
   return (
     violations.some((v) => v.severity === 'OVERRIDABLE') &&
@@ -36,9 +26,7 @@ export function canBeOverridden(violations: Violation[]): boolean {
   );
 }
 
-// ─────────────────────────── Reglas ───────────────────────────
-
-/** No se asigna a un turno que ya no está planificado: sería falsear historia. */
+/** a closed or cancelled shift takes no assignments */
 function shiftRules({ shift }: AssignmentContext): Violation[] {
   if (shift.status === 'PLANNED') return [];
 
@@ -52,7 +40,7 @@ function shiftRules({ shift }: AssignmentContext): Violation[] {
   ];
 }
 
-/** Regla 8: no se asigna un equipo bloqueado, en taller o dado de baja. */
+/** rule 8: blocked, in workshop or retired equipment cannot be assigned */
 function equipmentStatusRules({ equipment }: AssignmentContext): Violation[] {
   switch (equipment.status) {
     case 'AVAILABLE':
@@ -91,7 +79,7 @@ function equipmentStatusRules({ equipment }: AssignmentContext): Violation[] {
   }
 }
 
-/** Un operador dado de baja no opera: se reactiva desde su ficha, no se fuerza el turno. */
+/** inactive operators are reactivated from their record, not forced into a shift */
 function operatorRules({ operator }: AssignmentContext): Violation[] {
   if (operator.active) return [];
 
@@ -104,7 +92,7 @@ function operatorRules({ operator }: AssignmentContext): Violation[] {
   ];
 }
 
-/** Reglas 6 y 7: un operador y un equipo, una sola asignación vigente por turno. */
+/** rules 6 and 7: one active assignment per operator and per equipment in a shift */
 function duplicationRules({ shift, equipment, operator, activeAssignments }: AssignmentContext): Violation[] {
   const violations: Violation[] = [];
 
@@ -133,10 +121,7 @@ function duplicationRules({ shift, equipment, operator, activeAssignments }: Ass
   return violations;
 }
 
-/**
- * Regla 9: certificación vigente para el tipo de equipo, evaluada contra la fecha
- * del turno. De las certificaciones del tipo vale la de mayor `expiresAt` (renovaciones).
- */
+/** rule 9: certification valid at the shift date; renewals win by latest expiry */
 function certificationRules({ shift, equipment, operator, certifications }: AssignmentContext): Violation[] {
   const delTipo = certifications.filter((c) => c.equipmentTypeId === equipment.typeId);
 
@@ -150,7 +135,7 @@ function certificationRules({ shift, equipment, operator, certifications }: Assi
     ];
   }
 
-  // Las fechas ISO se ordenan igual como texto que como fecha.
+  // iso dates sort the same as strings and as dates
   const vigente = delTipo.reduce((a, b) => (a.expiresAt >= b.expiresAt ? a : b));
 
   if (vigente.expiresAt < shift.date) {
@@ -176,9 +161,7 @@ function certificationRules({ shift, equipment, operator, certifications }: Assi
   return [];
 }
 
-// ─────────────────────────── Formato de mensajes ───────────────────────────
-
-/** La severidad la pone la tabla de §2, nunca la regla que emite la violación. */
+/** severity comes from the code table, never from the rule that raises it */
 function violation(code: ViolationCode, message: string, context: Record<string, unknown>): Violation {
   return { code, severity: SEVERITY_BY_CODE[code], message, context };
 }
@@ -192,7 +175,7 @@ function hours(value: number): string {
   return hoursFormat.format(value);
 }
 
-/** '2026-08-18' → '18/08/2026'. */
+/** '2026-08-18' → '18/08/2026' */
 function date(value: IsoDate): string {
   const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;

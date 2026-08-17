@@ -8,9 +8,7 @@ export default defineConfig({
     seed: 'tsx prisma/seed.ts',
   },
   datasource: {
-    // Conexión DIRECTA, sin pooler: las migraciones abren transacciones largas y
-    // PgBouncer en modo transacción no las soporta. En local es la misma cadena que
-    // DATABASE_URL; en Neon son dos distintas.
+    // direct connection, no pooler: pgbouncer in transaction mode cannot run migrations
     url: env('MIGRATE_DATABASE_URL'),
   },
 });

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canBeOverridden, validateAssignment } from '@/src/domain/rules/assignment-rules';
 import type { AssignmentContext } from '@/src/domain/types';
 
-/** Contexto sano: turno planificado, equipo disponible, operador certificado y turno vacío. */
+/** healthy context: planned shift, available equipment, certified operator, empty shift */
 function contexto(overrides: Partial<AssignmentContext> = {}): AssignmentContext {
   return {
     shift: {
@@ -133,7 +133,7 @@ describe('validateAssignment', () => {
   });
 
   it('rechaza certificación vencida evaluada contra la FECHA DEL TURNO, no contra hoy', () => {
-    // Hoy la certificación está vigente (vence el 20/08), pero el turno es el 25/08.
+    // the certification is valid today (expires 20/08) but the shift is on 25/08
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-15T12:00:00Z'));
 
@@ -158,7 +158,7 @@ describe('validateAssignment', () => {
   it('rechaza al operador que nunca tuvo certificación del tipo con OPERATOR_NOT_CERTIFIED', () => {
     const v = validateAssignment(
       contexto({
-        // Certificado en otro tipo de equipo: no habilita el camión.
+        // certified on another equipment type: does not cover the truck
         certifications: [
           { equipmentTypeId: 't-exc', issuedAt: '2025-01-01', expiresAt: '2027-01-01' },
         ],
@@ -175,7 +175,7 @@ describe('validateAssignment', () => {
       contexto({
         certifications: [
           { equipmentTypeId: 't-cam', issuedAt: '2023-01-01', expiresAt: '2026-01-31' }, // vencida
-          { equipmentTypeId: 't-cam', issuedAt: '2026-01-15', expiresAt: '2027-01-31' }, // renovación
+          { equipmentTypeId: 't-cam', issuedAt: '2026-01-15', expiresAt: '2027-01-31' }, // renewal
         ],
       }),
     );
@@ -184,7 +184,7 @@ describe('validateAssignment', () => {
   });
 
   it('avisa (WARNING) si la certificación vence a mitad del turno', () => {
-    // Turno NOCHE del 18/08 que termina el 19/08; la certificación cubre solo hasta el 18.
+    // night shift of 18/08 ending on the 19th; the certification only covers the 18th
     const v = validateAssignment(
       contexto({
         shift: {
@@ -286,7 +286,7 @@ describe('validateAssignment', () => {
     );
     expect(canBeOverridden(soloSalvables)).toBe(true);
 
-    // Un WARNING solo no bloquea, así que no hay nada que forzar.
+    // a lone warning does not block, so there is nothing to force
     const soloAviso = validateAssignment(
       contexto({
         shift: { ...contexto().shift, journey: 'NIGHT', endDate: '2026-08-19' },

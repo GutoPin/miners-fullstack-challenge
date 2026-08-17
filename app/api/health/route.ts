@@ -3,12 +3,10 @@ import { prisma } from '@/src/db/prisma';
 export const dynamic = 'force-dynamic';
 
 /**
- * Latido del servicio: comprueba que la base responde, no solo que el proceso está vivo.
- * Lo consulta el workflow de keep-alive cada 6 h para que Neon no se enfríe.
- *
- * Devuelve el commit desplegado porque "¿está en línea?" y "¿está en línea la versión que
- * subí?" son preguntas distintas: Vercel sigue sirviendo el despliegue anterior cuando un
- * build falla, así que un `ok` sin versión no distingue una cosa de la otra.
+ * Health check: proves the database answers, not just that the process is alive. The
+ * keep-alive workflow calls it every 6 h. It reports the deployed commit because Vercel
+ * keeps serving the previous deployment when a build fails, so an `ok` without a version
+ * cannot tell "online" from "running what I pushed".
  */
 export async function GET() {
   const version = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local';

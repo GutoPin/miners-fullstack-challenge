@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { projectMaintenance } from '@/src/domain/projection';
 import type { EquipmentSnapshot, PlannedUsage } from '@/src/domain/types';
 
-/** CAM-002 del seed: 738,0 h con umbral 750,0 → le quedan 12 h de operación. */
+/** CAM-002 from the seed: 738 h against a 750 h threshold, so 12 h left */
 function equipo(overrides: Partial<EquipmentSnapshot> = {}): EquipmentSnapshot {
   return {
     id: 'e2',
@@ -17,7 +17,7 @@ function equipo(overrides: Partial<EquipmentSnapshot> = {}): EquipmentSnapshot {
   };
 }
 
-/** Turno programado con una asignación vigente: el caso normal. */
+/** scheduled shift with a current assignment: the normal case */
 function turno(
   date: string,
   journey: 'DAY' | 'NIGHT',
@@ -36,7 +36,7 @@ function turno(
 
 describe('projectMaintenance', () => {
   it('detecta el cruce del umbral en el tercer turno programado', () => {
-    // 738 + 5 + 5 + 5 = 753 ≥ 750: cruza en el tercero, no antes.
+    // 738 + 5 + 5 + 5 = 753 ≥ 750: crosses on the third one, not earlier
     const r = projectMaintenance(equipo(), [
       turno('2026-08-18', 'DAY', 5),
       turno('2026-08-19', 'DAY', 5),
@@ -53,12 +53,12 @@ describe('projectMaintenance', () => {
   });
 
   it('indica en qué hora del turno se cruza el umbral', () => {
-    // Le quedan 12 h y el turno dura 12: cruza justo al final del turno.
+    // 12 h left and a 12 h shift: crosses exactly at the end
     const r = projectMaintenance(equipo(), [turno('2026-08-18', 'DAY', 12)]);
 
     expect(r).toMatchObject({ status: 'WILL_CROSS', hoursIntoShift: 12 });
 
-    // Con 5 h ya consumidas antes, el cruce se adelanta a la hora 7 del segundo turno.
+    // with 5 h already used, the crossing moves to hour 7 of the second shift
     const r2 = projectMaintenance(equipo(), [
       turno('2026-08-18', 'DAY', 5),
       turno('2026-08-19', 'DAY', 12),
@@ -72,7 +72,7 @@ describe('projectMaintenance', () => {
   });
 
   it('ordena el turno NOCHE después del turno DÍA de la misma fecha', () => {
-    // Llegan desordenados a propósito: el cruce ocurre en el turno DÍA, no en el NOCHE.
+    // deliberately out of order: the crossing happens on the day shift, not the night one
     const r = projectMaintenance(equipo({ currentHours: 740 }), [
       turno('2026-08-18', 'NIGHT', 12),
       turno('2026-08-18', 'DAY', 12),
@@ -102,8 +102,7 @@ describe('projectMaintenance', () => {
       turno('2026-08-20', 'DAY', 12),
     ]);
 
-    // hoursRemaining es siempre umbral − horómetro actual (500 − 402), en las tres ramas:
-    // es la columna "Faltan" de /proyeccion. El margen tras la semana sale de projectedHours.
+    // hoursRemaining is always threshold − current hours (500 − 402) in all three branches
     expect(r).toEqual({ status: 'SAFE', projectedHours: 438, hoursRemaining: 98 });
   });
 
@@ -116,7 +115,7 @@ describe('projectMaintenance', () => {
   });
 
   it('ignora turnos CERRADOS y asignaciones CANCELADAS', () => {
-    // Las tres horas ignoradas bastarían de sobra para cruzar el umbral.
+    // the three ignored shifts would have been more than enough to cross
     const r = projectMaintenance(equipo(), [
       turno('2026-08-18', 'DAY', 12, { shiftStatus: 'CLOSED' }),
       turno('2026-08-19', 'DAY', 12, { shiftStatus: 'CANCELLED' }),

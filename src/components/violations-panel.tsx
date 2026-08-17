@@ -1,7 +1,4 @@
-/**
- * El panel que hace visible la regla 11: cuando una asignación se rechaza se muestran
- * **todas** las razones, cada una con su severidad y qué hacer al respecto.
- */
+/** Rule 11 made visible: every reason a rejection has, with its severity and what to do. */
 import type { Violation } from '../domain/rules/violation';
 import { Badge } from './ui';
 

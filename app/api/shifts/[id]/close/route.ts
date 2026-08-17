@@ -6,7 +6,7 @@ import { closeShift } from '@/src/services/close-shift';
 export const dynamic = 'force-dynamic';
 
 const schema = z.object({
-  // Claves = id de asignación. Sin dato, se cierran con las horas planificadas.
+  // keyed by assignment id; missing entries close with the planned hours
   actualHours: z
     .record(z.string(), z.number('las horas reales deben ser un número'))
     .optional(),

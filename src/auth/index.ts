@@ -1,7 +1,6 @@
 /**
- * Auth.js con credenciales. Sin identidad no existe "excepción autorizada por un
- * supervisor" (`DECISIONES.md` §2.2), así que la autenticación es mínima pero real:
- * contraseñas con bcrypt y rol en el token.
+ * Auth.js with credentials. Without identity there is no "exception authorized by a
+ * supervisor", so authentication is minimal but real: bcrypt passwords, role in the token.
  */
 import bcrypt from 'bcryptjs';
 import NextAuth from 'next-auth';
@@ -27,8 +26,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({ where: { email } });
 
-        // Se compara igual aunque el usuario no exista: así el tiempo de respuesta no
-        // delata qué correos están registrados.
+        // compared even when the user is unknown, so timing does not reveal registered emails
         const valido = user
           ? bcrypt.compareSync(password, user.passwordHash)
           : bcrypt.compareSync(password, '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva');
@@ -41,10 +39,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   ],
 });
 
-/**
- * Guardas de servidor. Se usan igual desde un route handler que desde una Server Action:
- * la validación vive en el servidor siempre, nunca en el componente que dibuja el botón.
- */
+/** server guards, used the same way from a route handler and from a server action */
 export async function requireSession() {
   const session = await auth();
 
@@ -59,10 +54,7 @@ export async function requireSession() {
   return session.user;
 }
 
-/**
- * Autorización por rol. La comprobación fina (quién puede firmar una excepción) vive en el
- * servicio; esto solo cierra la puerta antes de llegar.
- */
+/** role check at the door; who may sign an exception is decided in the service */
 export async function requireRole(...roles: Role[]) {
   const user = await requireSession();
 

@@ -1,10 +1,8 @@
 name: keepalive
 
-# Neon apaga el compute tras unos minutos sin consultas y tarda ~0,5 s en despertar. Una
-# visita cada 6 h mantiene la demo caliente para quien la abra sin avisar.
-#
-# GitHub deshabilita los `schedule` tras 60 días sin actividad en el repositorio; también
-# se puede lanzar a mano desde la pestaña Actions.
+# Neon suspends its compute after a few idle minutes. A call every 6 h keeps the demo warm.
+# GitHub disables scheduled workflows after 60 days without repository activity; this one
+# can also be started by hand from the Actions tab.
 on:
   schedule:
     - cron: '0 */6 * * *'

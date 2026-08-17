@@ -13,9 +13,8 @@ services:
       interval: 5s
       retries: 10
 
-  # Trabajo de un solo uso: prepara la base y termina. Usa la etapa `builder`, que sí tiene
-  # el código fuente y la CLI, para que la imagen que se publica no cargue con ellos.
-  # Ambos comandos son idempotentes: repetir `up` no duplica datos.
+  # one-shot job: prepares the database and exits. uses the builder stage, which has the
+  # source and the cli, so the published image carries neither. both commands are idempotent
   migrate:
     build:
       context: .
@@ -36,11 +35,10 @@ services:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     environment:
-      # Sin pooler de por medio, las dos cadenas son la misma. En Neon no lo son:
-      # DATABASE_URL apunta al pooler y MIGRATE_DATABASE_URL a la conexión directa.
+      # without a pooler both strings match; on neon they do not
       DATABASE_URL: postgresql://mineops:mineops@db:5432/mineops
       MIGRATE_DATABASE_URL: postgresql://mineops:mineops@db:5432/mineops
-      AUTH_SECRET: secreto-solo-para-desarrollo-local
+      AUTH_SECRET: local-development-only
       AUTH_URL: http://localhost:3000
       AUTH_TRUST_HOST: "true"
       TZ: America/Lima

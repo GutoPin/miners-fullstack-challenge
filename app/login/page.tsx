@@ -15,7 +15,7 @@ async function entrar(formData: FormData) {
       redirectTo: '/',
     });
   } catch (error) {
-    // `signIn` señala el éxito lanzando la redirección de Next: se deja pasar.
+    // signIn signals success by throwing next's redirect, so let it through
     if (error instanceof AuthError) redirect('/login?error=1');
     throw error;
   }

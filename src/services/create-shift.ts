@@ -1,8 +1,8 @@
 /**
- * Crear un turno (regla 5: fecha + jornada + duración).
+ * Create a shift (rule 5: date + journey + duration).
  *
- * No hace falta transacción: es una sola fila. La unicidad de (fecha, jornada) la garantiza
- * el índice de la base; aquí solo se traduce el choque a un mensaje que se entienda.
+ * No transaction needed for a single row. Uniqueness of (date, journey) is enforced by the
+ * index; this only turns the clash into a message someone can act on.
  */
 import { Prisma } from '../db/generated/client';
 import { prisma } from '../db/prisma';

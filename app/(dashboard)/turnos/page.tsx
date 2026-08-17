@@ -20,8 +20,7 @@ async function crearTurno(formData: FormData) {
   let error: string | null = null;
 
   try {
-    // El rol se comprueba en el servidor. Que el formulario no se dibuje para un VIEWER
-    // es comodidad; esto es la garantía.
+    // the server check is the guarantee; hiding the form is only convenience
     await requireRole('PLANNER', 'SUPERVISOR');
 
     await createShift({
@@ -46,8 +45,7 @@ export default async function TurnosPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  // Ocultar el formulario a quien no puede crear es cortesía; la guarda real está dentro
-  // de la Server Action.
+  // real guard lives in the server action
   const session = await auth();
   const puedeCrear = session?.user.role === 'PLANNER' || session?.user.role === 'SUPERVISOR';
 

@@ -5,11 +5,9 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 /**
- * Enlace de la barra lateral que sabe si es la sección actual. Es lo único de la navegación
- * que necesita correr en el cliente: `usePathname` no existe en el servidor.
- *
- * `aria-current="page"` no es adorno: sin él, quien usa lector de pantalla no tiene forma
- * de saber en qué pantalla está, porque el resalte es solo color.
+ * Sidebar link that knows whether it is the current section: the only part of the nav that
+ * needs the client, since `usePathname` does not exist on the server. `aria-current` is not
+ * decoration — the highlight is colour alone, which a screen reader cannot announce.
  */
 export function NavLink({ href, children }: { href: string; children: ReactNode }) {
   const pathname = usePathname();

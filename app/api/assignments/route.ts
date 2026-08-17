@@ -31,8 +31,7 @@ export async function POST(request: Request) {
 
     const { assignment, warnings, forced } = await createAssignment({ ...input, userId });
 
-    // Una asignación forzada es una excepción autorizada: queda en el log además de en
-    // `AssignmentOverride`, porque el log es lo que se revisa cuando algo salió mal.
+    // a forced assignment is an authorized exception: logged as well as stored
     logJson({
       ...t,
       userId,

@@ -4,7 +4,7 @@ import { nextThreshold } from '@/src/domain/maintenance-policy';
 
 describe('nextThreshold', () => {
   it('el siguiente umbral se ancla al umbral anterior, no al horómetro real', () => {
-    // umbral 250, servicio a las 280 h, intervalo 250
+    // threshold 250, serviced at 280 h, interval 250
     expect(nextThreshold(250, 280, 250)).toMatchObject({
       next: 500,
       overdue: 30,
@@ -13,7 +13,7 @@ describe('nextThreshold', () => {
   });
 
   it('no acumula desfase en tres ciclos consecutivos con atraso', () => {
-    // 250→280, 500→515, 750→790  ⇒  umbrales siguen siendo 500, 750, 1000
+    // 250→280, 500→515, 750→790: thresholds stay 500, 750, 1000
     const ciclo1 = nextThreshold(250, 280, 250);
     const ciclo2 = nextThreshold(ciclo1.next, 515, 250);
     const ciclo3 = nextThreshold(ciclo2.next, 790, 250);
@@ -28,7 +28,7 @@ describe('nextThreshold', () => {
   });
 
   it('el equipo nunca sale del taller ya bloqueado: el nuevo umbral supera al horómetro', () => {
-    // Caso límite: el servicio se hizo justo al cumplirse el ciclo siguiente.
+    // edge case: serviced exactly when the next cycle came due
     const { next, reAnchored } = nextThreshold(250, 500, 250);
 
     expect(next).toBeGreaterThan(500);

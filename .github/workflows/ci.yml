@@ -6,11 +6,10 @@ on:
   pull_request:
 
 jobs:
-  verificar:
+  verify:
     runs-on: ubuntu-latest
 
-    # Los tests de integración necesitan un PostgreSQL de verdad: los tres bugs de
-    # concurrencia que encontramos solo aparecen contra una base real, no contra un doble.
+    # the integration tests need a real postgres: the concurrency bugs only appear there
     services:
       postgres:
         image: postgres:17-alpine
@@ -23,11 +22,10 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-retries 10
 
     env:
-      # Sin pooler, las dos cadenas coinciden. `MIGRATE_DATABASE_URL` es la que lee
-      # prisma.config.ts (Prisma 7 sacó la URL del schema.prisma).
+      # prisma.config.ts reads MIGRATE_DATABASE_URL; prisma 7 moved the url out of the schema
       DATABASE_URL: postgresql://test:test@localhost:5432/test
       MIGRATE_DATABASE_URL: postgresql://test:test@localhost:5432/test
-      AUTH_SECRET: secreto-solo-para-ci
+      AUTH_SECRET: ci-secret
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +35,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      # `postinstall` genera el cliente de Prisma; sin él no compila nada.
+      # postinstall generates the prisma client
       - run: npm ci
 
       - run: npx prisma migrate deploy

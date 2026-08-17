@@ -1,13 +1,10 @@
-/**
- * Textos y formatos de la interfaz. Un solo lugar para que "AT_RISK" se lea igual en las
- * cinco pantallas y para que las horas se escriban siempre con el mismo formato.
- */
+/** UI labels and formats, in one place so every screen renders a status the same way. */
 import type { AssignmentStatus, EquipmentStatus, Journey, ShiftStatus } from '../domain/types';
 import { toOperationalDate } from '../services/dates';
 
 export type Tono = 'ok' | 'aviso' | 'bloqueo' | 'taller' | 'neutro';
 
-/** Estados de `docs/UI.md` §3. El color nunca va solo: siempre hay texto. */
+/** color never travels alone: there is always a label next to it */
 export const ESTADO_EQUIPO: Record<EquipmentStatus, { label: string; tono: Tono }> = {
   AVAILABLE: { label: 'Disponible', tono: 'ok' },
   BLOCKED: { label: 'Bloqueado', tono: 'bloqueo' },
@@ -40,11 +37,9 @@ export function formatHoras(value: number | { toString(): string }): string {
 }
 
 /**
- * Días entre hoy y una fecha `@db.Date`, en días completos. Negativo = ya pasó.
- *
- * "Hoy" es el día de calendario en Lima, no la medianoche local del servidor: en Vercel el
- * proceso corre en UTC y `TZ` es una variable reservada que no se puede definir, así que
- * depender del reloj del servidor haría que un vencimiento se viera un día corrido.
+ * Whole days between today and a `@db.Date`; negative means past. "Today" is the calendar
+ * day in Lima, not the server's local midnight: the process runs in UTC and `TZ` cannot be
+ * set on Vercel, so trusting the server clock would shift an expiry by a day.
  */
 export function diasHasta(value: Date, hoy = new Date()): number {
   const dia = 24 * 60 * 60 * 1000;

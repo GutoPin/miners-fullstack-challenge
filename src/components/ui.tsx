@@ -1,7 +1,4 @@
-/**
- * Las cuatro piezas visuales que se repiten en todas las pantallas. No es una librería de
- * componentes: es lo mínimo para que las tablas se vean iguales entre sí.
- */
+/** The few visual pieces every screen repeats. Not a component library, just consistency. */
 import type { ReactNode } from 'react';
 
 import type { Tono } from './format';
@@ -64,7 +61,7 @@ export function Panel({
   );
 }
 
-/** Barra de horómetro: `738,0 / 750,0 h` se entiende mejor viéndose que leyéndose. */
+/** hourmeter bar: the ratio reads faster as a shape than as two numbers */
 export function BarraHorometro({ actual, umbral }: { actual: number; umbral: number }) {
   const porcentaje = umbral > 0 ? Math.min(100, (actual / umbral) * 100) : 0;
   const color =

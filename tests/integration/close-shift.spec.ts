@@ -21,8 +21,8 @@ let userId: string;
 let typeId: string;
 
 /**
- * Cada caso monta su propio equipo y operador. Compartirlos haría que un test dependiera
- * de las horas que sumó el anterior, y un test que solo pasa en cierto orden no prueba nada.
+ * Every case builds its own equipment and operator. Sharing them would make one test depend
+ * on the hours the previous one added, and a test that only passes in order proves nothing.
  */
 async function escenario(sufijo: string, horas: number, umbral: number) {
   const equipo = await crearEquipo(`${m}${sufijo}`, typeId, {
@@ -69,7 +69,7 @@ describe('closeShift', () => {
     expect(Number(asiento.hoursDelta)).toBe(10);
     expect(Number(asiento.hoursAfter)).toBe(110);
 
-    // Se guardan las reales y las planificadas: el desvío es información de negocio.
+    // both actual and planned are kept: the variance is business information
     const cerrada = await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
     expect(cerrada.status).toBe('COMPLETED');
     expect(Number(cerrada.actualHours)).toBe(10);
@@ -110,7 +110,7 @@ describe('closeShift', () => {
     const resultado = await closeShift({ shiftId: hoy.id, userId });
     expect(resultado.assignmentsAtRisk).toBe(1);
 
-    // No se cancela: queda en riesgo y con alerta, para que alguien decida (DECISIONES §2.1).
+    // not cancelled: left at risk with an alert, for a person to decide
     const despues = await prisma.assignment.findUniqueOrThrow({ where: { id: futura.id } });
     expect(despues.status).toBe('AT_RISK');
     expect(despues.riskReason).toContain('Equipo bloqueado por mantenimiento');
@@ -131,7 +131,7 @@ describe('closeShift', () => {
       closeShift({ shiftId: turno.id, userId, actualHours: { [assignment.id]: 6 } }),
     ).rejects.toMatchObject({ code: 'VARIANCE_NOTE_REQUIRED' });
 
-    // El rechazo no dejó nada a medias: ni asiento ni horómetro movido.
+    // the rejection left nothing half done: no entry, no hourmeter movement
     expect(await prisma.hourmeterEntry.count({ where: { referenceId: assignment.id } })).toBe(0);
     const equipo = await prisma.equipment.findUniqueOrThrow({ where: { id: equipmentId } });
     expect(Number(equipo.currentHours)).toBe(100);
@@ -159,7 +159,7 @@ describe('closeShift', () => {
       code: 'SHIFT_NOT_PLANNED',
     });
 
-    // El segundo intento no volvió a sumar horas: un solo asiento de cierre.
+    // the second attempt added no hours: a single close entry
     const cierres = await prisma.hourmeterEntry.count({
       where: { equipmentId, source: 'SHIFT_CLOSE' },
     });

@@ -1,9 +1,8 @@
 /**
- * Registrar un mantenimiento (regla 3).
+ * Register a maintenance service (rule 3).
  *
- * Libera el equipo, deja historial y calcula el próximo umbral con la política anclada de
- * `docs/MODELO-DATOS.md` §4. Todo en una transacción: liberar sin registrar el asiento del
- * horómetro dejaría la bitácora mintiendo.
+ * Releases the equipment, records history and computes the next threshold with the anchored
+ * policy. One transaction: releasing without the ledger entry would leave the log lying.
  */
 import { nextThreshold } from '../domain/maintenance-policy';
 import { ServiceError } from './errors';
@@ -13,7 +12,7 @@ import { serializable } from './transaction';
 export interface RegisterMaintenanceInput {
   equipmentId: string;
   userId: string;
-  /** Horómetro real leído en el taller al hacer el servicio. */
+  /** hourmeter read at the workshop during the service */
   hoursAtService: number;
   responsible: string;
   performedAt?: Date;
@@ -49,8 +48,7 @@ export async function registerMaintenance(input: RegisterMaintenanceInput) {
 
     const currentHours = Number(equipment.currentHours);
 
-    // Un horómetro no retrocede. Si la lectura del taller es menor que el saldo, el error
-    // está en el dato y hay que corregirlo, no absorberlo en silencio.
+    // an hourmeter never goes backwards: a lower reading is bad data, not a value to absorb
     if (input.hoursAtService < currentHours) {
       throw new ServiceError({
         code: 'HOURMETER_CANNOT_DECREASE',
@@ -83,9 +81,7 @@ export async function registerMaintenance(input: RegisterMaintenanceInput) {
       },
     });
 
-    // Si la lectura del taller no coincide con el saldo, la diferencia también es un
-    // movimiento del horómetro y necesita su asiento (para eso existe el origen
-    // MAINTENANCE en el ledger).
+    // the gap between balance and workshop reading is movement too, so it gets its entry
     const delta = input.hoursAtService - currentHours;
     if (delta > 0) {
       await tx.hourmeterEntry.create({
@@ -102,8 +98,7 @@ export async function registerMaintenance(input: RegisterMaintenanceInput) {
       });
     }
 
-    // Un equipo dado de baja no se reactiva registrando un servicio: eso se decide en su
-    // ficha. El mantenimiento solo libera lo que el mantenimiento bloqueó.
+    // a retired unit is not revived by a service: maintenance only releases what it blocked
     const status = equipment.status === 'OUT_OF_SERVICE' ? 'OUT_OF_SERVICE' : 'AVAILABLE';
 
     const actualizado = await tx.equipment.updateMany({

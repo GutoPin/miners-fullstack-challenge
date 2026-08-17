@@ -1,8 +1,8 @@
 /**
- * Datos aislados para los tests de integración.
+ * Isolated data for the integration tests.
  *
- * Cada test crea su propio escenario con un prefijo único y lo borra al terminar, así puede
- * correr contra una base que ya tiene el seed —o en paralelo con otro test— sin pisarse.
+ * Each test builds its own scenario behind a unique prefix and deletes it afterwards, so it
+ * can run against a seeded database, or next to another test, without collisions.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -15,20 +15,19 @@ export function marca(): string {
 }
 
 /**
- * Los turnos tienen `UNIQUE(date, journey)`, así que dos ficheros de test —o un test y el
- * seed— no pueden usar la misma fecha. Cada fichero corre en su propio worker de Vitest y
- * se lleva un rango de fechas propio, muy por delante de lo que usa el seed.
+ * Shifts are `UNIQUE(date, journey)`, so two files — or a file and the seed — cannot share a
+ * date. Each file takes its own date range, far ahead of anything the seed uses.
  */
 const BASE_DIAS = 400 + Math.floor(Math.random() * 20_000);
 
-/** Fecha operativa a N días de hoy, en formato ISO. */
+/** operational date N days from today */
 export function fecha(offsetDays: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + offsetDays);
   return d.toISOString().slice(0, 10);
 }
 
-/** Fecha dentro del rango reservado para este fichero de test. */
+/** date inside the range reserved for this test file */
 function fechaDeTurno(offsetDays: number): string {
   return fecha(BASE_DIAS + offsetDays);
 }
@@ -70,8 +69,7 @@ export async function crearEquipo(
     },
   });
 
-  // Igual que el seed: si nace con horas, nacen con su asiento. Así el invariante
-  // "suma del ledger == horómetro" se puede comprobar sin excepciones.
+  // like the seed: hours are born with their entry, so the ledger invariant always holds
   if (opts.currentHours > 0) {
     await prisma.hourmeterEntry.create({
       data: {
@@ -98,9 +96,9 @@ export async function crearOperador(m: string, sufijo = '') {
 }
 
 /**
- * La vigencia se cuenta **dentro del rango de fechas de este fichero**, no desde hoy: los
- * turnos de prueba viven cientos de días en el futuro y una certificación "a 180 días de
- * hoy" ya estaría vencida para ellos. La regla 9 evalúa contra la fecha del turno.
+ * Validity is counted inside this file's date range, not from today: the test shifts live
+ * hundreds of days ahead, where a certification "180 days from now" would already be
+ * expired. Rule 9 evaluates against the shift date.
  */
 export async function certificar(operatorId: string, equipmentTypeId: string, diasVigencia = 180) {
   return prisma.certification.create({
@@ -130,10 +128,7 @@ export async function crearTurno(offsetDias: number, journey: Journey = 'DAY', p
   return turno;
 }
 
-/**
- * Borra todo lo que creó un escenario. El orden respeta las claves foráneas: primero lo
- * que apunta, después lo apuntado.
- */
+/** deletes everything a scenario created, in foreign key order */
 export async function limpiar(m: string) {
   const equipos = await prisma.equipment.findMany({ where: { code: { contains: m } }, select: { id: true } });
   const operadores = await prisma.operator.findMany({ where: { code: { contains: m } }, select: { id: true } });

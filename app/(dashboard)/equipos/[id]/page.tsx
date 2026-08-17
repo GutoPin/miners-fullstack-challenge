@@ -39,8 +39,7 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
   const intervalo =
     equipo.maintenanceIntervalOverride ?? equipo.type.maintenanceIntervalHours;
 
-  // El saldo debe ser la suma del libro mayor. Si no cuadra, el dato está mal y hay que
-  // verlo, no esconderlo.
+  // the balance must equal the ledger sum; a mismatch is shown, not hidden
   const sumaLedger = equipo.hourmeterEntries.reduce((t, h) => t + Number(h.hoursDelta), 0);
   const cuadra = equipo.hourmeterEntries.length < 50 && Math.abs(sumaLedger - actual) < 0.005;
 

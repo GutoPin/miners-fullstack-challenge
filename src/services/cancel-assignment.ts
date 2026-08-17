@@ -1,10 +1,8 @@
 /**
- * Cancelar una asignación.
+ * Cancel an assignment.
  *
- * Es una de las tres salidas que `DECISIONES.md` §2.1 exige para una asignación en riesgo
- * (reasignar, cancelar o forzar). Cancelar **libera el cupo** poniendo `activeSlot` en
- * `NULL`: el índice único deja de contarla y el histórico se conserva, que es exactamente
- * para lo que existe esa columna.
+ * Frees the slot by setting `activeSlot` to `NULL`: the unique index stops counting it
+ * while the row is kept for history, which is exactly what that column is for.
  */
 import { prisma } from '../db/prisma';
 import { ServiceError } from './errors';
@@ -29,8 +27,7 @@ export async function cancelAssignment(input: CancelAssignmentInput) {
       });
     }
 
-    // El pasado no se edita: un turno cerrado ya sumó horas al horómetro y cancelar una
-    // asignación después sería falsear historia.
+    // the past is not edited: a closed shift already moved the hourmeter
     if (assignment.shift.status !== 'PLANNED') {
       throw new ServiceError({
         code: 'SHIFT_NOT_PLANNED',
@@ -56,7 +53,7 @@ export async function cancelAssignment(input: CancelAssignmentInput) {
       },
     });
 
-    // Las alertas de una asignación cancelada dejan de tener sentido.
+    // alerts on a cancelled assignment no longer mean anything
     await tx.alert.updateMany({
       where: { assignmentId: assignment.id, resolvedAt: null },
       data: { resolvedAt: new Date() },

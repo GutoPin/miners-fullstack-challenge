@@ -1,9 +1,8 @@
 /**
- * Errores de la capa de servicios.
+ * Service layer errors.
  *
- * Un solo lugar donde nace la forma de error del API (`docs/ARQUITECTURA.md` §7):
- * `{ error: { code, message, violations[] } }`. Los route handlers solo eligen el
- * código HTTP y serializan; no arman mensajes.
+ * The API error shape `{ error: { code, message, violations[] } }` is born here and
+ * nowhere else; route handlers only serialize what comes out.
  */
 import { Prisma } from '../db/generated/client';
 import type { Violation } from '../domain/rules/violation';
@@ -13,7 +12,7 @@ export class ServiceError extends Error {
   readonly code: string;
   readonly status: number;
   readonly violations: Violation[];
-  /** Solo en rechazos de asignación: si un SUPERVISOR podría autorizar la excepción. */
+  /** assignment rejections only: whether a SUPERVISOR could authorize the exception */
   readonly canBeOverridden?: boolean;
 
   constructor(params: {
@@ -43,11 +42,7 @@ export class ServiceError extends Error {
   }
 }
 
-/**
- * Traduce cualquier error a la respuesta del API y deja su línea de log. Los route handlers
- * solo serializan lo que sale de aquí: un error inesperado nunca debe filtrar su mensaje
- * interno al usuario, pero tampoco puede perderse.
- */
+/** translates any error into the API response and logs it; internals never reach the user */
 export function toErrorResponse(
   error: unknown,
   traza: Traza & { userId?: string },
@@ -56,8 +51,7 @@ export function toErrorResponse(
   body: ReturnType<ServiceError['toResponse']>;
 } {
   if (error instanceof ServiceError) {
-    // Un rechazo de negocio no es una avería: se registra como `warn` con su código, que
-    // es lo que después permite contar cuántas asignaciones se rechazan y por qué.
+    // a business rejection is not a failure: warn level, with its code, so it can be counted
     logJson({
       ...traza,
       level: 'warn',
@@ -92,16 +86,12 @@ export function toErrorResponse(
 }
 
 /**
- * Traduce la violación de unicidad de la base (P2002) al rechazo de negocio que
- * corresponde. Es la tercera capa de la defensa contra concurrencia
- * (`docs/ARQUITECTURA.md` §5): dos requests simultáneos pasan la validación, uno inserta
- * y el otro llega aquí.
+ * Turns a unique violation (P2002) into the matching business rejection: the third layer
+ * of the concurrency defence, reached when two requests pass validation and one inserts
+ * first.
  *
- * Qué índice se violó se averigua mirando `meta.target` **y** el mensaje: con el driver
- * adapter de Prisma 7, `meta.target` llega vacío y los nombres de las columnas solo
- * aparecen en el texto del error ("Unique constraint failed on the fields: …"). Se busca la
- * palabra dentro de ambos, así funciona tanto si viene el nombre del índice como si viene
- * la lista de columnas.
+ * Both `meta.target` and the message are searched because with the Prisma 7 driver adapter
+ * `meta.target` comes back empty and the column names only appear in the error text.
  */
 export function uniqueViolationToServiceError(
   error: unknown,

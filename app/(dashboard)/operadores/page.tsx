@@ -6,7 +6,7 @@ import { formatIsoDate, toIsoDate } from '@/src/services/dates';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Operadores · MineOps' };
 
-/** Aviso a 30 días: es el plazo con el que una renovación todavía se puede gestionar. */
+/** 30 days ahead: still enough time to process a renewal */
 const AVISO_DIAS = 30;
 
 export default async function OperadoresPage() {

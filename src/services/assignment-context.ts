@@ -1,10 +1,9 @@
 /**
- * Arma el snapshot que consume el motor de reglas y lo evalúa.
+ * Builds the snapshot the rule engine consumes, and evaluates it.
  *
- * Lo usan dos caminos: la creación real (dentro de la transacción, sobre filas bloqueadas)
- * y la validación previa de la interfaz (lectura suelta, sin escribir nada). Es la misma
- * función a propósito: si la vista previa y la creación divergieran, la vista previa
- * estaría mintiendo.
+ * Two callers share it: the real creation, inside the transaction and over locked rows, and
+ * the UI preview, a plain read. Deliberately the same function — if preview and creation
+ * ever diverged, the preview would be lying.
  */
 import type { Prisma } from '../db/generated/client';
 import { validateAssignment } from '../domain/rules/assignment-rules';
@@ -108,11 +107,7 @@ export async function buildAssignmentContext(
   };
 }
 
-/**
- * Vista previa para la interfaz: dice qué pasaría **sin escribir nada**. No reemplaza la
- * validación de la creación, que se repite dentro de la transacción y sobre la fila del
- * equipo bloqueada; entre esta consulta y el envío, el estado puede cambiar.
- */
+/** preview: says what would happen without writing; the real check runs again on submit */
 export async function previewAssignment(
   db: Prisma.TransactionClient,
   input: AssignmentQuery,

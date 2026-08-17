@@ -1,35 +1,31 @@
 /**
- * Proyección de mantenimiento a 7 días (regla 12).
+ * Seven-day maintenance projection (rule 12).
  *
- * No se resuelve mirando el estado actual: hay que simular el futuro turno a turno,
- * porque el umbral puede cruzarse a mitad de la semana y el orden de los turnos importa.
+ * Current state is not enough: the threshold can be crossed mid-week, so the upcoming
+ * shifts are simulated one by one in chronological order.
  */
 import type { EquipmentSnapshot, IsoDate, Journey, PlannedUsage } from './types';
 
 export type ProjectionResult =
-  /** Ya superó su umbral: está (o debería estar) bloqueado ahora mismo. */
+  /** already past its threshold: blocked right now */
   | { status: 'ALREADY_BLOCKED'; hoursRemaining: 0 }
-  /** Cruza el umbral dentro de la ventana proyectada. */
+  /** crosses the threshold inside the projected window */
   | {
       status: 'WILL_CROSS';
       crossesOn: IsoDate;
       crossesInShift: Journey;
-      /** Hora del turno en la que cruza: permite decidir si conviene acortarlo. */
+      /** hour of the shift at which it crosses */
       hoursIntoShift: number;
       projectedHours: number;
-      /** Horas de operación que le quedan desde su horómetro actual. */
       hoursRemaining: number;
     }
-  /** Con todos los turnos programados no llega al umbral. */
+  /** does not reach the threshold with every scheduled shift */
   | {
       status: 'SAFE';
       projectedHours: number;
-      /** Horas de operación que le quedan desde su horómetro actual. */
       hoursRemaining: number;
     };
-// `hoursRemaining` significa lo mismo en las tres ramas: umbral − horómetro actual, la
-// columna "Faltan" de /proyeccion. El margen que sobra tras la semana se deduce de
-// `projectedHours` y no necesita un campo que cambie de significado según el estado.
+// hoursRemaining means the same in all three branches: threshold − current hourmeter
 
 export function projectMaintenance(
   equipment: EquipmentSnapshot,
@@ -49,7 +45,7 @@ export function projectMaintenance(
         status: 'WILL_CROSS',
         crossesOn: shift.date,
         crossesInShift: shift.journey,
-        hoursIntoShift: threshold - before, // en qué hora del turno cruza
+        hoursIntoShift: threshold - before,
         projectedHours: hours,
         hoursRemaining: threshold - equipment.currentHours,
       };
@@ -63,10 +59,7 @@ export function projectMaintenance(
   };
 }
 
-/**
- * Solo cuenta el trabajo que realmente va a ocurrir, en orden cronológico: el turno
- * NOCHE del día D se opera después del turno DÍA del mismo D.
- */
+/** only work that will actually happen, chronologically: night runs after day of the same date */
 function enOrden(upcoming: PlannedUsage[]): PlannedUsage[] {
   return upcoming
     .filter(

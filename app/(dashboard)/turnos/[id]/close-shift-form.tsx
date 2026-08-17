@@ -17,7 +17,7 @@ export interface FilaCierre {
   nextMaintenanceHours: number;
 }
 
-/** Los mismos umbrales que aplica el servidor (REGLAS-NEGOCIO §3). */
+/** same thresholds the server applies */
 const DESVIO_HORAS = 2;
 const DESVIO_RELATIVO = 0.25;
 
@@ -80,8 +80,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                   <td className={tabla.td}>
                     <input
                       type="number"
-                      // Sin nombre accesible, un lector de pantalla anuncia doce casillas
-                      // iguales: la columna sola no dice de qué equipo es cada una.
+                      // without a name, a screen reader announces twelve identical boxes
                       aria-label={`Horas reales de ${f.equipmentCode}`}
                       min={0.5}
                       max={24}
@@ -94,7 +93,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                     />
                   </td>
                   <td className={`${tabla.td} text-xs`}>
-                    {/* Ver la consecuencia antes de confirmarla es el punto de esta pantalla. */}
+                    {/* seeing the consequence before confirming is the point of this screen */}
                     {formatHoras(f.currentHours)} → {formatHoras(despues)} h
                     {bloquea && (
                       <strong className="ml-1 text-red-800">· quedará BLOQUEADO</strong>

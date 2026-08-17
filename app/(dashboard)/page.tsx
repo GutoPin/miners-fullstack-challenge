@@ -38,7 +38,7 @@ export default async function TableroPage() {
     }),
   ]);
 
-  // Las críticas primero: son las que exigen una decisión hoy.
+  // critical first: those need a decision today
   const ORDEN = { CRITICAL: 0, WARNING: 1, INFO: 2 } as const;
   const activas = [...alertas].sort((a, b) => ORDEN[a.severity] - ORDEN[b.severity]);
 
@@ -47,8 +47,7 @@ export default async function TableroPage() {
     return acc;
   }, {});
 
-  // "Cerca del umbral" = le queda menos del 10 % de su intervalo. Es el aviso barato que
-  // se ve de un vistazo; la proyección real de 7 días llega en su propia pantalla.
+  // near the threshold: under 10 % of the interval left; the real projection has its own screen
   const cerca = equipos.filter((e) => {
     const faltan = Number(e.nextMaintenanceHours) - Number(e.currentHours);
     return e.status === 'AVAILABLE' && faltan > 0 && faltan <= Number(e.nextMaintenanceHours) * 0.1;

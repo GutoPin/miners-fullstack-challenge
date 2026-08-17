@@ -45,8 +45,7 @@ export default async function AuditoriaPage() {
         ) : (
           <ul className="divide-y divide-line">
             {excepciones.map((o) => {
-              // Snapshot congelado el día que se firmó: aunque mañana cambien las reglas,
-              // el registro conserva qué se saltó y con qué datos.
+              // snapshot frozen the day it was signed, immune to later rule changes
               const saltadas = (o.violatedRules as unknown as Violation[]) ?? [];
 
               return (

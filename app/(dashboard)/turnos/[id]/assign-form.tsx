@@ -21,7 +21,7 @@ export interface OpcionOperador {
   id: string;
   code: string;
   fullName: string;
-  /** Resumen de sus certificaciones, para decidir antes de enviar. */
+  /** certification summary, to decide before submitting */
   certificaciones: string;
 }
 
@@ -48,15 +48,12 @@ export function AsignarForm({
   const [motivo, setMotivo] = useState('');
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  // La previa se guarda junto con la combinación que la produjo: así, al cambiar de
-  // operador o equipo, el resultado viejo deja de mostrarse solo, sin tener que limpiarlo.
+  // the preview is stored with the pair that produced it, so a stale result hides itself
   const [previa, setPrevia] = useState<{ clave: string; violations: Violation[] } | null>(null);
   const clave = `${operatorId}|${equipmentId}`;
   const previaActual = previa?.clave === clave ? previa.violations : null;
 
-  // Validación previa contra el servidor: en cuanto hay operador y equipo se pregunta qué
-  // pasaría. El retardo evita una petición por cada cambio del selector, y el `cancelado`
-  // descarta respuestas que llegan tarde y pisarían un resultado más nuevo.
+  // server-side preview; the delay debounces the selects and `cancelado` drops late answers
   useEffect(() => {
     if (!operatorId || !equipmentId) return;
 
@@ -177,8 +174,7 @@ export function AsignarForm({
         </button>
       </form>
 
-      {/* El estado del equipo se ve antes de enviar; la validación real igual la hace el
-          servidor, esto solo evita chocar de gusto. */}
+      {/* hint only: the server still validates */}
       {equipo && (
         <p className="mt-3 text-xs text-muted">
           {equipo.code}: {equipo.estado} · {formatHoras(equipo.currentHours)} de{' '}
@@ -186,8 +182,7 @@ export function AsignarForm({
         </p>
       )}
 
-      {/* La previa aparece sola al cambiar los selectores: `polite` la lee sin interrumpir
-          lo que el usuario esté haciendo. El rechazo del envío sí es `alert`. */}
+      {/* the preview appears on its own, so polite; a submit rejection is an alert */}
       <div aria-live="polite">
         {!error && previaActual && previaActual.length > 0 && (
           <div className="mt-4">
