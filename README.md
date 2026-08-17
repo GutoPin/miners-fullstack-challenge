@@ -1,42 +1,64 @@
 # MineOps — Control de equipos mineros y mantenimiento por horómetro
 
-Aplicación web que reemplaza las hojas de cálculo con las que una operación minera asigna
-equipos (camiones de acarreo, excavadoras, perforadoras) a turnos y controla cuándo entran
-a mantenimiento.
+Aplicación web para asignar equipos (camiones de acarreo, excavadoras, perforadoras) a los
+turnos de una operación minera y controlar cuándo entran a mantenimiento, en reemplazo de
+las hojas de cálculo con las que hoy se lleva ese control.
 
-El sistema **no deja** que se asigne un equipo bloqueado, un operador sin certificación
-vigente o el mismo equipo/operador dos veces en el mismo turno, y **proyecta** qué equipos
-van a llegar a su mantenimiento en los próximos 7 días según los turnos ya programados.
+El sistema **impide** asignar un equipo bloqueado por horómetro, un operador sin
+certificación vigente o el mismo equipo dos veces en el mismo turno; cuando rechaza, muestra
+**todas** las razones a la vez. Y **proyecta** qué equipos van a alcanzar su mantenimiento en
+los próximos 7 días según los turnos ya programados, para que el bloqueo se anticipe en vez
+de sorprender al inicio de la guardia.
 
-- 🌐 **App desplegada:** `https://<tu-app>.vercel.app`
-- 📦 **Repositorio:** `https://github.com/<tu-usuario>/mineops`
-- 🧠 **Decisiones de diseño:** [`DECISIONES.md`](./DECISIONES.md)
+| | |
+|---|---|
+| **Aplicación** | https://miners-fullstack-challenge.vercel.app |
+| **Decisiones de diseño** | [`DECISIONES.md`](./DECISIONES.md) |
 
 ---
 
-## Credenciales de prueba
+## Acceso
 
-| Rol | Usuario | Contraseña | Puede |
+| Rol | Usuario | Contraseña | Alcance |
 |---|---|---|---|
 | Supervisor | `supervisor@mineops.pe` | `supervisor123` | Todo, incluido **autorizar excepciones** |
-| Planificador | `planner@mineops.pe` | `planner123` | Crear turnos y asignaciones, cerrar turnos |
+| Planificador | `planner@mineops.pe` | `planner123` | Crear turnos y asignaciones, cerrar turnos, registrar mantenimientos |
 | Consulta | `viewer@mineops.pe` | `viewer123` | Solo lectura |
 
 ---
 
-## Qué hace
+## Funcionalidad
 
 | Módulo | Qué resuelve |
 |---|---|
-| **Equipos** | Código, tipo, horómetro, estado (`DISPONIBLE / BLOQUEADO / EN_MANTENIMIENTO / FUERA_DE_SERVICIO`) y umbral del próximo mantenimiento. |
-| **Mantenimientos** | Registrar servicio → libera el equipo y deja historial (fecha, horómetro, responsable, observaciones) + recalcula el próximo umbral. |
-| **Operadores y certificaciones** | Certificación por tipo de equipo con fecha de vencimiento; validación contra la fecha del turno. |
-| **Turnos y asignaciones** | Turno = fecha + jornada (día/noche) + duración. Asignación = operador + equipo + turno, validada contra las 12 reglas. |
-| **Motor de reglas** | Cuando una asignación se rechaza devuelve **todas** las razones, no la primera. |
-| **Cierre de turno** | Registra horas reales, las suma al horómetro y dispara el bloqueo por mantenimiento si corresponde. |
-| **Proyección a 7 días** | Simula el consumo futuro de horas de los turnos programados y dice qué equipo cruza su umbral, en qué fecha y en qué turno. |
-| **Excepciones con autorización** | Un supervisor puede forzar ciertas asignaciones dejando motivo y traza; otras reglas son **infranqueables**. |
-| **Auditoría** | Bitácora de horómetro (ledger) y registro de excepciones. |
+| **Equipos** | Horómetro, estado (`DISPONIBLE / BLOQUEADO / EN MANTENIMIENTO / FUERA DE SERVICIO`) y umbral del próximo servicio. |
+| **Operadores y certificaciones** | Certificación por tipo de equipo con vencimiento; la vigencia se evalúa contra la fecha del turno, no contra hoy. |
+| **Turnos y asignaciones** | Turno = fecha + jornada (día/noche) + duración. Cada asignación se valida contra las 12 reglas del enunciado. |
+| **Motor de reglas** | Un rechazo devuelve el listado completo de violaciones, cada una con su severidad y qué hacer para resolverla. |
+| **Excepciones con autorización** | Un supervisor puede forzar las reglas que son política (equipo bloqueado, certificación vencida) dejando motivo y traza; las que son imposibilidad física no se fuerzan nunca. |
+| **Cierre de turno** | Registra horas reales, las suma al horómetro y bloquea el equipo si cruzó el umbral, en una sola transacción. |
+| **Mantenimiento** | Libera el equipo, ancla el próximo umbral y deja historial con responsable, horómetro y atraso. |
+| **Proyección a 7 días** | Simula el consumo de horas de los turnos programados: qué equipo cruza su umbral, en qué fecha y en qué turno. |
+| **Auditoría** | Libro mayor del horómetro y registro de excepciones autorizadas. |
+
+---
+
+## Recorrido de la demo
+
+Los datos de ejemplo están cargados: el recorrido se hace sobre el sistema tal como está.
+
+1. **Rechazo múltiple** — *Turnos → turno de hoy → asignar* `OP-001` con `CAM-003`. Salen las
+   tres razones juntas: operador ya asignado, equipo bloqueado y certificación vencida.
+2. **Excepción autorizada** — la misma asignación como supervisor: aparece *Forzar con
+   autorización*, exige motivo y la asignación nace **EN RIESGO**, no activa.
+3. **Bloqueo por horómetro** — *cerrar el turno de hoy*: `CAM-002` cruza su umbral y queda
+   **BLOQUEADO** solo, y sus asignaciones futuras pasan a **EN RIESGO** con alerta.
+4. **Proyección** — */proyeccion* lista los equipos que cruzan el umbral esta semana, con
+   fecha y jornada exactas.
+5. **Mantenimiento** — registrar el servicio de `CAM-002` libera el equipo, ancla el próximo
+   umbral al anterior (no al horómetro real) y devuelve a activas las asignaciones en riesgo.
+6. **Auditoría** — */auditoria* muestra cada movimiento de horómetro con horas antes y
+   después, y las excepciones firmadas.
 
 ---
 
@@ -44,113 +66,80 @@ van a llegar a su mantenimiento en los próximos 7 días según los turnos ya pr
 
 | Capa | Elección |
 |---|---|
-| Framework (UI + API en un solo despliegue) | **Next.js 16 (App Router) + TypeScript** |
-| UI | Tailwind CSS 4 · tipografía IBM Plex Sans/Mono |
-| ORM / migraciones | **Prisma 7** (driver adapter `@prisma/adapter-pg`) |
-| Base de datos | **PostgreSQL** en Neon (plan gratuito, serverless) |
-| Auth | Auth.js (Credentials) + bcrypt, roles `SUPERVISOR / PLANNER / VIEWER` |
-| Validación | Zod (mismos schemas en cliente y servidor) |
-| Tests | Vitest (unitarios del motor de reglas + integración contra Postgres real) |
-| CI | GitHub Actions (lint + typecheck + tests con servicio Postgres) |
-| Local | Docker Compose (app + Postgres) |
+| Framework (UI + API en un despliegue) | Next.js 16 (App Router) + TypeScript |
+| Base de datos | PostgreSQL (Neon) |
+| ORM y migraciones | Prisma 7 con driver adapter `@prisma/adapter-pg` |
+| Autenticación | Auth.js (Credentials) + bcrypt, roles `SUPERVISOR / PLANNER / VIEWER` |
+| Validación | Zod en el borde HTTP; las reglas de negocio, en TypeScript puro |
+| UI | Tailwind CSS 4 |
+| Tests | Vitest: unitarios del motor de reglas + integración contra PostgreSQL real |
+| CI | GitHub Actions: lint, typecheck y ambas suites en cada push |
+| Infraestructura | Vercel + Neon; `docker compose` para levantar todo en local |
 
 El porqué de cada elección está en [`DECISIONES.md`](./DECISIONES.md).
 
 ---
 
-## Levantarlo en local
+## Ejecución local
 
-### Opción rápida: todo en Docker
-
-Levanta Postgres, aplica las migraciones, siembra los datos de ejemplo y arranca la app:
+Con Docker, que además migra y siembra los datos de ejemplo:
 
 ```bash
 docker compose up --build        # http://localhost:3000
 ```
 
-Son tres servicios: `db` (Postgres 17), `migrate` (trabajo de un solo uso que migra y
-siembra; termina y se apaga) y `app` (la imagen `standalone` de Next). Reiniciar no duplica
-nada: `migrate deploy` y el seed son idempotentes.
-
-### Opción con Node local
+Con Node, contra una base propia:
 
 ```bash
-cp .env.example .env             # completar AUTH_SECRET y las dos cadenas de conexión
-docker compose up -d db          # Postgres 17 en localhost:5432
+cp .env.example .env             # completar AUTH_SECRET y las cadenas de conexión
+docker compose up -d db          # PostgreSQL 17 en localhost:5432
 npm install
-npx prisma migrate deploy        # crea el esquema y los CHECK constraints
-npm run db:seed                  # carga los datos de ejemplo con los casos borde
-npm run dev                      # http://localhost:3000
+npx prisma migrate deploy
+npm run db:seed
+npm run dev
 ```
 
 ### Variables de entorno
 
-```env
-DATABASE_URL="postgresql://mineops:mineops@localhost:5432/mineops?schema=public"
-# Conexión directa que usan las migraciones (en local, la misma; en Neon, la que no lleva -pooler)
-MIGRATE_DATABASE_URL="postgresql://mineops:mineops@localhost:5432/mineops?schema=public"
-AUTH_SECRET="<openssl rand -base64 32>"
-AUTH_URL="http://localhost:3000"
-TZ="America/Lima"
-```
+| Variable | Para qué |
+|---|---|
+| `DATABASE_URL` | Conexión que usa la aplicación (en Neon, la del *pooler*). |
+| `MIGRATE_DATABASE_URL` | Conexión directa que usan las migraciones; la lee `prisma.config.ts`. |
+| `AUTH_SECRET` | Firma de la sesión (`openssl rand -base64 32`). |
+| `AUTH_URL` | URL pública de la aplicación, con esquema. |
 
----
-
-## Comandos
+### Comandos
 
 ```bash
 npm run dev            # desarrollo
-npm run build          # build de producción
 npm run lint           # eslint
 npm run typecheck      # tsc --noEmit
-npm run test           # unitarios (motor de reglas, proyección)
-npm run test:int       # integración contra Postgres (requiere DB levantada)
-npm run db:seed        # carga/recarga datos de ejemplo
-npm run db:reset       # migrate reset + seed
+npm run test           # unitarios: reglas, política de umbrales y proyección
+npm run test:int       # integración: cierre, mantenimiento y concurrencia (requiere base)
+npm run db:seed        # datos de ejemplo
 ```
 
 ---
 
-## Datos de ejemplo (casos borde ya sembrados)
+## Despliegue
 
-El seed deja el sistema listo para probar sin crear nada a mano:
+La aplicación corre en Vercel y la base en Neon (PostgreSQL serverless). Cada push a `main`
+despliega y aplica las migraciones pendientes; un workflow programado consulta
+`/api/health` cada 6 horas para que la base no esté fría cuando se abra la demo.
 
-1. **CAM-002** — camión a **12 horas** de su umbral de mantenimiento → aparece en la proyección.
-2. **CAM-003** — ya **BLOQUEADO** por horómetro → cualquier intento de asignarlo se rechaza.
-3. **OP-004 (Rosa Quispe)** — certificación de excavadora **vencida ayer** → rechazo por regla 9.
-4. **OP-005** — certificación que **vence a mitad de la próxima semana**, con turnos ya programados después → asignación marcada `EN_RIESGO`.
-5. **Turno T-HOY-DÍA** — al cerrarlo con las horas planificadas **dispara el bloqueo** de CAM-002.
-6. **OP-001** — ya tiene una asignación en el turno de hoy → sirve para probar el rechazo múltiple (operador duplicado + equipo bloqueado + certificación vencida en un solo intento).
-
----
-
-## Cómo se desplegó
-
-- **App:** Vercel (plan Hobby, gratis). Cada push a `main` despliega; `prisma migrate deploy` corre en el build.
-- **Base de datos:** PostgreSQL serverless en Neon (plan Free), rama `main` para producción.
-- **Seed de producción:** `DATABASE_URL=<url-de-neon> npm run db:seed` desde local, una sola vez.
-- **CI:** GitHub Actions corre lint, typecheck y las dos suites de tests —los de integración
-  contra un Postgres de servicio— en cada push y cada PR.
-- **Keep-alive:** un workflow programado consulta `/api/health` cada 6 h para que Neon no
-  esté frío cuando alguien abra la demo.
-- **Diagnóstico:** cada rechazo y cada error del API se registra como una línea JSON con
-  `requestId`, y ese mismo identificador vuelve en la cabecera `x-request-id` de la
-  respuesta: con el número que ve el usuario se encuentra la línea exacta en los logs.
+Los rechazos y errores del API se registran como una línea JSON con `requestId`, y ese mismo
+identificador vuelve en la cabecera `x-request-id` de la respuesta: con el número que ve el
+usuario se ubica la línea exacta en los logs.
 
 ---
 
-## Documentación del repo
+## Estructura
 
-| Archivo | Contenido |
-|---|---|
-| [`DECISIONES.md`](./DECISIONES.md) | **Entregable obligatorio:** modelo de datos, decisiones abiertas, qué quedó fuera, uso de IA. |
-| `prisma/schema.prisma` | Esquema completo con índices e invariantes, comentado. |
-| `src/domain/` | Motor de reglas en TypeScript puro, sin ORM: es donde vive el núcleo evaluable. |
-| `tests/unit/` | Tests del motor de reglas, la política de umbrales y la proyección. |
-
----
-
-## Alcance
-
-Lo que **no** entra en esta entrega y por qué está en [`DECISIONES.md`](./DECISIONES.md#qué-dejé-fuera).
-
+```
+src/domain/      Reglas de negocio en TypeScript puro: sin ORM, sin framework
+src/services/    Casos de uso y transacciones
+app/api/         Endpoints REST
+app/(dashboard)/ Interfaz
+prisma/          Esquema, migraciones versionadas y datos de ejemplo
+tests/           Unitarios del dominio e integración contra PostgreSQL
+```

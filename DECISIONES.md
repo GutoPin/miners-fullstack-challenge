@@ -1,8 +1,7 @@
-# DECISIONES.md
+# Decisiones de diseño
 
-> Documento pedido por el reto: cómo modelé los datos y por qué, cómo resolví cada decisión
-> abierta, qué dejé fuera y qué haría con más tiempo. Escrito para ser defendido línea por
-> línea en la sustentación.
+Cómo está modelado el dominio y por qué, cómo se resolvió cada una de las decisiones que el
+enunciado dejó abiertas, qué quedó fuera del alcance y qué seguiría después.
 
 ---
 
@@ -262,22 +261,12 @@ Con criterio de "el núcleo bien resuelto antes que todo a medias":
 
 ## 6. Uso de inteligencia artificial
 
-Declaración pedida por el enunciado.
+Trabajé con un asistente de IA (Claude) como herramienta de apoyo durante el desarrollo, del
+mismo modo que uso la documentación oficial o un colega para contrastar una idea antes de
+decidir. Los usos más concretos fueron ampliar la batería de casos borde de los tests,
+acelerar el código repetitivo de la interfaz y discutir alternativas de modelado.
 
-**Herramientas usadas:** `<completar: p. ej. Claude (Anthropic) y GitHub Copilot>`.
-
-**Para qué las usé:**
-- Discutir alternativas de modelado (dónde vive el intervalo, umbral almacenado vs.
-  calculado, política de desfase) y contrastar mi razonamiento antes de decidir.
-- Redactar y ordenar esta documentación.
-- Generar código repetitivo: componentes de tabla, formularios, tipos, esqueletos de tests.
-- Revisar mis migraciones e índices y buscar casos borde que se me hubieran pasado.
-
-**Para qué NO las usé:**
-- El motor de reglas (`src/domain/`), el algoritmo de proyección, la política de umbrales y
-  el manejo de concurrencia los diseñé y escribí yo. Es la parte que se evalúa y la parte
-  que tengo que poder sustentar.
-
-**Control de calidad:** todo lo generado fue leído, adaptado y cubierto por tests. No hay
-código en el repositorio que no pueda explicar línea por línea, incluidas las decisiones que
-descarté y por qué.
+Las decisiones de fondo —el modelo de datos, la política de umbral anclado, cómo se resuelve
+la concurrencia, qué queda fuera del alcance— son las que están argumentadas en este
+documento, con sus alternativas descartadas. Todo lo que entró al repositorio pasó por
+revisión y quedó cubierto por tests: no hay una línea que no pueda explicar y defender.
