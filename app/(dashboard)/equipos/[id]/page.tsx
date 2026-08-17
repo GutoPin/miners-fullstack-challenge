@@ -7,7 +7,7 @@ import { ESTADO_EQUIPO, formatHoras } from '@/src/components/format';
 import { Badge, BarraHorometro, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toOperationalDate } from '@/src/services/dates';
-import { RegistrarMantenimiento } from './registrar-mantenimiento';
+import { RegistrarMantenimiento } from './register-maintenance-form';
 
 export const dynamic = 'force-dynamic';
 

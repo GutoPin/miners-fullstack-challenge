@@ -13,9 +13,9 @@ import {
 import { Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toIsoDate } from '@/src/services/dates';
-import { AsignarForm } from './asignar-form';
-import { CancelarAsignacion } from './cancelar-asignacion';
-import { CerrarTurnoForm } from './cerrar-turno-form';
+import { AsignarForm } from './assign-form';
+import { CancelarAsignacion } from './cancel-assignment';
+import { CerrarTurnoForm } from './close-shift-form';
 
 export const dynamic = 'force-dynamic';
 
