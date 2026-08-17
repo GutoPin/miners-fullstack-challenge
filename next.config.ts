@@ -2,9 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ['pg'],
-  // Servidor autocontenido para la imagen de Docker. Vercel no lo usa, pero tenerlo activo
-  // no le estorba y evita que el Dockerfile dependa de una configuración distinta.
-  output: 'standalone',
+  // standalone is for the docker image only: it breaks vercel's build tracing
+  ...(process.env.BUILD_STANDALONE === '1' ? { output: 'standalone' as const } : {}),
 };
 
 export default nextConfig;
