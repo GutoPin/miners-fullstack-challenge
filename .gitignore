@@ -42,13 +42,15 @@ yarn-error.log*
 next-env.d.ts
 .env
 
+# Cliente de Prisma: se genera con `prisma generate` en cada instalación y build
+src/db/generated/
 /src/generated/prisma
 
+# Configuración de herramientas y notas de trabajo: no forman parte de la entrega
 .agents
 .claude
 .windsurf
-src/db/generated/
-
-# Documentación de trabajo interna: no se publica
+CLAUDE.md
+skills-lock.json
 SETUP.md
 /docs
