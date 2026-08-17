@@ -1,62 +1,66 @@
 # Decisiones de diseño
 
-Cómo está modelado el dominio y por qué, cómo se resolvió cada una de las decisiones que el
-enunciado dejó abiertas, qué quedó fuera del alcance y qué seguiría después.
+Cómo modelé los datos y por qué, cómo resolví cada decisión abierta del enunciado, qué dejé
+fuera y qué haría con más tiempo.
 
 ---
 
 ## 1. Modelo de datos
 
-### 1.1 Las cinco decisiones estructurales
+### 1.1 Decisiones estructurales
 
 **a) El intervalo de mantenimiento vive en el tipo de equipo, con excepción por unidad.**
-El enunciado dice "cada tipo de equipo tiene un intervalo". Lo modelé así
-(`EquipmentType.maintenanceIntervalHours`), pero agregué
+El enunciado dice que cada tipo de equipo tiene un intervalo, así que lo modelé en
+`EquipmentType.maintenanceIntervalHours`. Agregué además
 `Equipment.maintenanceIntervalOverride` (nulo por defecto) porque en operación real una
-unidad reparada o antigua queda con un régimen distinto al de su familia. Cuesta una
-columna y evita una migración dolorosa después.
+unidad reparada o antigua puede quedar con un régimen distinto al de su familia. Cuesta una
+columna y evita tener que migrar la tabla más adelante.
 
 **b) El umbral se almacena, no se calcula.** `Equipment.nextMaintenanceHours` guarda el
-valor absoluto de horómetro que dispara el bloqueo. Podría derivarse
-(`horas_último_servicio + intervalo`), pero almacenarlo (1) hace la proyección de 7 días una
-consulta simple, (2) permite umbrales excepcionales autorizados y (3) deja explícita la
-política de desfase (§2.3) en vez de esconderla en una fórmula.
+valor de horómetro que dispara el bloqueo. Se podría derivar
+(`horas del último servicio + intervalo`), pero almacenarlo tiene tres ventajas: la
+proyección de 7 días queda como una consulta simple, permite umbrales excepcionales
+autorizados, y deja explícita la política de desfase de §2.3 en lugar de esconderla en una
+fórmula.
 
 **c) El horómetro es un libro mayor, no un contador.** `HourmeterEntry` registra cada
 movimiento con `hoursBefore`, `hoursDelta`, `hoursAfter`, origen (`SHIFT_CLOSE`,
 `MAINTENANCE`, `MANUAL_ADJUSTMENT`, `INITIAL_LOAD`) y referencia. `Equipment.currentHours`
 es un saldo cacheado que solo se actualiza dentro de la misma transacción que escribe el
-asiento. Un horómetro es un dato con consecuencias legales y de costos: tiene que ser
-auditable y reconstruible. Hay un test que verifica el invariante
-`suma(deltas) == currentHours`.
+asiento. El horómetro determina cuándo entra un equipo a mantenimiento y cuánto cuesta
+operarlo, así que tiene que ser auditable y reconstruible. Hay un test que verifica el
+invariante `suma(deltas) == currentHours`.
 
-**d) Las reglas 6 y 7 son constraints de base de datos, no `if` de aplicación.**
+**d) Las reglas 6 y 7 son restricciones de base de datos, no `if` de aplicación.**
 `UNIQUE (shift_id, equipment_id, active_slot)` y `UNIQUE (shift_id, operator_id, active_slot)`,
-donde `activeSlot` vale `1` mientras la asignación ocupa cupo y pasa a `NULL` al cancelarla
-(ambos motores tratan los `NULL` como distintos, así que el histórico convive con la regla).
-El chequeo en la aplicación existe para dar **buenos mensajes**; la garantía la da el motor,
-que es lo único que no se rompe con dos instancias serverless concurrentes.
+donde `activeSlot` vale `1` mientras la asignación ocupa cupo y pasa a `NULL` al cancelarla.
+Tanto PostgreSQL como MySQL tratan los `NULL` como distintos entre sí, así que el histórico
+de canceladas convive con la restricción. La comprobación en la aplicación existe para dar
+buenos mensajes; la garantía la da el motor, que es lo único que sigue funcionando con
+varias instancias en paralelo.
 
 **e) Planificado y real son columnas distintas.** `Assignment.plannedHours` y
-`actualHours`, más `Shift.plannedHours`. El horómetro se mueve con lo real; la diferencia es
-información de negocio (desviación de planeamiento) que en las hojas de cálculo se pierde.
+`actualHours`, más `Shift.plannedHours`. El horómetro se mueve con las horas reales, y la
+diferencia entre ambas es información útil para planeamiento que en las hojas de cálculo se
+pierde.
 
 ### 1.2 Entidades
 
 `EquipmentType`, `Equipment`, `Operator`, `Certification`, `Shift`, `Assignment`,
 `AssignmentOverride`, `MaintenanceRecord`, `HourmeterEntry`, `Alert`, `User`.
-El esquema completo, con índices, `CHECK` y comentarios, está en `prisma/schema.prisma`
-y en las migraciones versionadas de `prisma/migrations/`.
+El esquema completo, con índices, restricciones `CHECK` y comentarios, está en
+`prisma/schema.prisma` y en las migraciones versionadas de `prisma/migrations/`.
 
-Un par de decisiones menores que también defiendo:
-- **Certificaciones múltiples por operador y tipo** (histórico de renovaciones), y vale la
-  de mayor vencimiento vigente a la fecha del turno. Modelarlo con una sola fila por
-  (operador, tipo) obligaría a destruir el historial en cada renovación.
-- **`Shift` guarda `date` (sin hora) y además `startsAt`/`endsAt`.** La fecha operativa es
-  la que usa la mina (un turno noche del 12 sigue siendo del 12 aunque termine el 13); los
-  instantes reales son los que uso para evaluar si una certificación vence *durante* el turno.
-- **`Alert` como tabla**, no como cálculo al vuelo: quiero que quede constancia de que el
-  sistema avisó, y cuándo.
+Tres decisiones menores del modelo:
+
+- **Certificaciones múltiples por operador y tipo de equipo.** Guardo el historial de
+  renovaciones y aplico la de mayor fecha de vencimiento a la fecha del turno. Con una sola
+  fila por (operador, tipo) habría que sobrescribir el historial en cada renovación.
+- **`Shift` guarda `date` (sin hora) y también `startsAt` / `endsAt`.** La fecha operativa
+  es la que usa la mina: un turno noche del 12 sigue siendo del 12 aunque termine el 13. Los
+  instantes reales los uso para evaluar si una certificación vence durante el turno.
+- **`Alert` es una tabla y no un cálculo al vuelo.** Así queda registro de que el sistema
+  avisó y de cuándo lo hizo.
 
 ---
 
@@ -64,209 +68,214 @@ Un par de decisiones menores que también defiendo:
 
 ### 2.1 Un equipo se bloquea a mitad de semana y ya tenía turnos programados
 
-**Decisión: no se cancelan. Pasan a `EN_RIESGO`, con alerta crítica, y el turno no se puede
-cerrar sin resolverlas.**
+**Decisión: las asignaciones no se cancelan. Pasan a `EN RIESGO`, con alerta crítica, y el
+turno no se puede cerrar sin resolverlas.**
 
-Cancelar automáticamente es la peor opción: el planificador se entera del hueco en el cambio
-de guardia. Borrar información que alguien decidió a mano es una decisión que el software no
-debe tomar solo. Lo que sí debe hacer es **hacer imposible ignorar el problema**:
+No cancelo automáticamente porque el planificador se enteraría del hueco recién en el cambio
+de guardia, que es el peor momento. Tampoco me parece correcto que el sistema borre por su
+cuenta algo que una persona decidió. Lo que sí hace es impedir que el problema pase
+desapercibido:
 
 1. Al bloquearse el equipo, sus asignaciones en turnos futuros `PLANNED` pasan a `AT_RISK`
-   con `riskReason`, dentro de la misma transacción que produjo el bloqueo.
-2. Se crea una `Alert` `ASSIGNMENT_AT_RISK` (severidad `CRITICAL`) visible en el tablero,
-   con enlaces directos a "reasignar equipo" o "cancelar asignación".
-3. El cierre de turno **exige resolver** toda asignación `AT_RISK`: reasignar, cancelar o
-   forzar con autorización de supervisor. No se puede cerrar en silencio.
+   con su `riskReason`, dentro de la misma transacción que produjo el bloqueo.
+2. Se crea una alerta `ASSIGNMENT_AT_RISK` de severidad `CRITICAL`, visible en el tablero,
+   con acceso directo a reasignar o cancelar.
+3. El cierre de turno exige resolver toda asignación `AT_RISK`: reasignar, cancelar o forzar
+   con autorización de un supervisor.
 4. Si se registra el mantenimiento antes del turno, las asignaciones vuelven a `ACTIVE` y
-   las alertas se marcan resueltas automáticamente.
+   las alertas quedan resueltas automáticamente.
 
-*Alternativa descartada:* cancelación automática con notificación. Más simple de programar,
-pero traslada el riesgo a la operación en el peor momento.
+*Alternativa descartada:* cancelación automática con notificación. Es más simple de
+programar, pero traslada el problema a la operación en el peor momento.
 
 ### 2.2 ¿Se puede forzar una asignación con autorización de un supervisor?
 
-**Decisión: sí, pero solo algunas reglas, y con traza completa.**
+**Decisión: sí, pero solo para algunas reglas y dejando traza completa.**
 
-Clasifiqué cada violación en dos familias (el catálogo completo, con su severidad y su
-porqué, está en `src/domain/rules/violation.ts`):
+Clasifiqué cada violación en dos grupos; el catálogo completo está en
+`src/domain/rules/violation.ts`:
 
-- **`HARD` — nunca se fuerza:** operador o equipo ya asignados en el mismo turno, turno
-  cerrado, equipo dado de baja. Son **imposibilidades físicas o corrupción de datos**;
-  ninguna firma hace que una excavadora esté en dos frentes a la vez.
-- **`OVERRIDABLE` — se puede forzar con firma:** equipo bloqueado por horómetro, equipo en
-  mantenimiento, certificación vencida o inexistente. Son **políticas**, y en una operación
-  real un superintendente sí las levanta bajo su responsabilidad.
+- **`HARD`, no se puede forzar:** operador o equipo ya asignados en el mismo turno, turno
+  cerrado, equipo dado de baja. Son imposibilidades físicas o inconsistencias de datos, y
+  autorizarlas no cambiaría el hecho de que un equipo no puede estar en dos frentes a la vez.
+- **`OVERRIDABLE`, se puede forzar con firma:** equipo bloqueado por horómetro, equipo en
+  mantenimiento, certificación vencida o inexistente. Son políticas de la empresa, y en una
+  operación real un superintendente puede levantarlas bajo su responsabilidad.
 
 Cómo queda registrada la excepción:
-- Solo el rol `SUPERVISOR` puede enviarla.
-- Motivo obligatorio (mínimo 15 caracteres), guardado en `AssignmentOverride.reason`.
-- Se guarda el **snapshot completo** de las violaciones salvadas en `violatedRules` (JSON):
-  aunque mañana cambie una regla, el registro conserva qué se saltó ese día y con qué datos.
-- La asignación nace en estado `AT_RISK`, no `ACTIVE`: forzada no es normal, y se ve así en
-  toda la aplicación (banner rojo con supervisor y motivo).
-- Se genera una `Alert` `OVERRIDE_USED` y la pantalla `/auditoria` lista todas las
-  excepciones, filtrables por fecha y supervisor.
 
-El objetivo del diseño es que forzar sea **posible pero incómodo y visible**. Un control que
-no se puede levantar nunca termina siendo un control que la gente evade por fuera del sistema.
+- Solo el rol `SUPERVISOR` puede enviarla.
+- El motivo es obligatorio, con un mínimo de 15 caracteres, y se guarda en
+  `AssignmentOverride.reason`.
+- Se guarda también el detalle de las violaciones que se saltaron, en `violatedRules` (JSON).
+  Si mañana cambia una regla, el registro conserva qué se saltó ese día y con qué datos.
+- La asignación queda en estado `AT_RISK` y no `ACTIVE`, y se muestra como tal en toda la
+  aplicación.
+- Se genera una alerta `OVERRIDE_USED` y la pantalla `/auditoria` lista todas las
+  excepciones con su supervisor, motivo y fecha.
+
+La idea es que forzar sea posible pero quede registrado. Si el sistema no admitiera ninguna
+excepción, la operación terminaría resolviéndolo por fuera y perderíamos la traza.
 
 ### 2.3 Mantenimiento hecho 30 horas después del umbral: ¿desde dónde cuenta el siguiente ciclo?
 
-**Decisión: desde el umbral (anclado), no desde el horómetro real.**
+**Decisión: desde el umbral, no desde el horómetro real.**
 
-Umbral 250 h, servicio a las 280 h, intervalo 250 → el siguiente umbral es **500**, no 530.
-El desfase de 30 h se guarda en `MaintenanceRecord.overdueHours` como indicador, no como
-crédito.
+Con umbral 250 h, servicio a las 280 h e intervalo de 250 h, el siguiente umbral es **500**,
+no 530. Las 30 horas de atraso se guardan en `MaintenanceRecord.overdueHours` como
+indicador, no como crédito.
 
-Razón: si contara desde el horómetro real, cada atraso correría la ventana hacia adelante y
-el desfase se acumularía; en un año la unidad habría recibido menos servicios de los que
-exige el fabricante y nadie lo notaría, porque cada ciclo individual se vería "correcto".
-Anclar al umbral convierte el atraso en un evento aislado y medible.
+El motivo es el desfase que menciona el enunciado: si contara desde el horómetro real, cada
+atraso correría la ventana hacia adelante y el retraso se iría acumulando. Al cabo de un año
+la unidad habría recibido menos servicios de los que indica el fabricante, y sería difícil de
+detectar porque cada ciclo por separado se vería correcto. Anclando al umbral, el atraso
+queda como un dato aislado y medible.
 
-**Salvaguarda:** si el atraso se comió un ciclo entero (servicio a las 780 h con umbral 250
-e intervalo 250), anclar daría 500 h y el equipo saldría del taller ya bloqueado. En ese
-caso re-anclo al primer múltiplo por encima del horómetro real (1.000) y marco
-`reAnchored = true` en el registro para que el caso sea visible en reportería. Está cubierto
-por tests.
+**Salvaguarda:** si el atraso superó un ciclo completo (por ejemplo, servicio a las 780 h con
+umbral 250 e intervalo 250), anclar daría 500 h y el equipo saldría del taller ya bloqueado.
+En ese caso el siguiente umbral se calcula como el primer múltiplo por encima del horómetro
+real (1.000) y se marca `reAnchored = true` en el registro, para que el caso se pueda revisar
+después. Está cubierto por tests.
 
 *Alternativa descartada:* contar desde el horómetro real. Es lo que hace la hoja de cálculo
-hoy, y es justamente la fuente del desfase silencioso que el enunciado señala entre paréntesis.
+actual y es la causa del desfase que señala el enunciado.
 
 ### 2.4 El turno se cerró con más o menos horas de las planificadas
 
-**Decisión: manda lo real; el desvío se registra y, si es grande, se justifica.**
+**Decisión: mandan las horas reales; el desvío se registra y, si es grande, se justifica.**
 
-- El horómetro suma **`actualHours`**, siempre. El horómetro describe la máquina, no el plan.
-- Se conservan `plannedHours` y `actualHours` por asignación; el desvío es consultable.
-- Desvío mayor a 2 h en valor absoluto (o más del 25 %) → **nota obligatoria**. Fricción
-  proporcional al tamaño del error: sin ella el dato se ensucia y el reporte no sirve.
-- El cierre es **idempotente**: un turno `CLOSED` no se vuelve a cerrar.
-- Horas fuera de rango (≤ 0 o > 24) se rechazan por `CHECK` en la base, no solo por la UI.
-- Si hubo un error de digitación después del cierre, no se edita el pasado: se registra un
-  `MANUAL_ADJUSTMENT` en el ledger con motivo y autor. El horómetro nunca "cambia de
-  opinión": se corrige con un asiento nuevo, como en contabilidad.
+- El horómetro suma siempre `actualHours`, porque refleja el uso real del equipo.
+- Se conservan `plannedHours` y `actualHours` por asignación, así que el desvío queda
+  consultable.
+- Si el desvío supera 2 horas en valor absoluto o el 25 % de lo planificado, la nota es
+  obligatoria. Sin ella el dato pierde valor para reportería.
+- El cierre es idempotente: un turno ya cerrado no se vuelve a cerrar ni suma horas de nuevo.
+- Las horas fuera de rango (≤ 0 o > 24) se rechazan con una restricción `CHECK` en la base,
+  no solo desde la interfaz.
+- Si después del cierre se detecta un error de digitación, no se edita el registro anterior:
+  se agrega un asiento `MANUAL_ADJUSTMENT` con su motivo y su autor.
 
 ### 2.5 Una certificación vence a mitad de un turno ya programado a futuro
 
-Separo dos casos, porque no son el mismo problema:
+Separo dos casos porque tienen consecuencias distintas:
 
-- **Vence antes de que empiece el turno** → violación `CERTIFICATION_EXPIRED` (regla 9). Si
-  el turno ya estaba asignado cuando la certificación se venció o se acortó, la asignación
-  pasa a `AT_RISK` con alerta `CERT_EXPIRING_BEFORE_SHIFT` y hay que resolverla antes del
-  cierre. Mismo mecanismo que el equipo bloqueado (§2.1): avisar, no borrar.
-- **Vence a mitad del turno** (vigente al iniciar, vencida al terminar) → **se permite** con
-  violación de severidad `WARNING`, visible en la asignación y registrada. Decidir si se
-  acorta el turno, se releva al operador a mitad de jornada o se acelera la renovación es una
-  decisión de operaciones; el software da el dato exacto (*"vence a las 03:00 del turno
-  noche"*) y no decide por ellos.
+- **Vence antes de que empiece el turno.** Es una violación `CERTIFICATION_EXPIRED` (regla
+  9). Si el turno ya estaba asignado cuando la certificación venció, la asignación pasa a
+  `AT_RISK` con alerta `CERT_EXPIRING_BEFORE_SHIFT` y hay que resolverla antes del cierre.
+  Es el mismo mecanismo que uso para el equipo bloqueado en §2.1.
+- **Vence a mitad del turno**, es decir, vigente al iniciar y vencida al terminar. Se permite
+  con una violación de severidad `WARNING`, visible en la asignación y registrada. Si se
+  acorta el turno, se releva al operador o se acelera la renovación es una decisión de
+  operaciones; el sistema aporta el dato exacto ("vence a las 03:00 del turno noche").
 
 Además, al crear o renovar una certificación se recalcula el riesgo de todos los turnos
-futuros de ese operador, para que la alerta aparezca el día que se genera el problema y no
+futuros de ese operador, para que la alerta aparezca el día en que se genera el problema y no
 el día del turno.
 
 ### 2.6 Dos supervisores asignan el mismo equipo al mismo turno a la vez
 
-**Decisión: la garantía la da la base de datos; la transacción solo mejora el mensaje.**
+**Decisión: la garantía la da la base de datos; la transacción sirve para dar un mejor
+mensaje.**
 
-Tres capas, de la más fuerte a la más cosmética:
+Tres capas, de la más fuerte a la menos:
 
-1. **Índice único** `UNIQUE (shift_id, equipment_id, active_slot)` (y el equivalente para
-   operador). Si dos requests pasan la validación al mismo tiempo, uno inserta y el otro
-   recibe violación de unicidad, que traduzco a
-   **409 "otro usuario acaba de tomar este equipo para este turno"**. Funciona con N
-   instancias serverless y sin coordinación entre ellas. Es la única capa que *no* puede
-   fallar.
-2. **`SELECT … FOR UPDATE` sobre la fila del equipo** dentro de la transacción (aislamiento
-   `Serializable`): serializa las validaciones sobre el mismo equipo y evita que dos
-   procesos lean el mismo estado y ambos concluyan "disponible".
-3. **Bloqueo optimista** con columna `version` en `Equipment` para los movimientos de
-   horómetro (cierre de turno, mantenimiento): si la versión cambió se reintenta una vez y
-   si no, 409.
+1. **Índice único** `UNIQUE (shift_id, equipment_id, active_slot)`, y su equivalente para el
+   operador. Si dos peticiones pasan la validación al mismo tiempo, una inserta y la otra
+   recibe una violación de unicidad, que traduzco a un **409 "otro usuario acaba de tomar
+   este equipo para este turno"**. Funciona con varias instancias y sin coordinación entre
+   ellas, porque no depende del código de aplicación.
+2. **`SELECT … FOR UPDATE` sobre la fila del equipo** dentro de la transacción, con
+   aislamiento `Serializable`. Serializa las validaciones sobre el mismo equipo y evita que
+   dos procesos lean el mismo estado y ambos concluyan que está disponible.
+3. **Bloqueo optimista** con una columna `version` en `Equipment` para los movimientos de
+   horómetro (cierre de turno y mantenimiento). Si la versión cambió, se reintenta una vez y,
+   si vuelve a fallar, se responde 409.
 
-Está probado: `tests/integration/concurrency.spec.ts` dispara dos (y veinte) creaciones
-simultáneas con `Promise.allSettled` y verifica que exactamente una tenga éxito y que la
-base quede con una sola fila vigente.
+Está probado en `tests/integration/concurrency.spec.ts`, que dispara dos y veinte creaciones
+simultáneas con `Promise.allSettled` y verifica que solo una tenga éxito y que quede una sola
+fila vigente en la base.
 
-*Alternativa descartada:* bloqueo a nivel de aplicación (mutex en memoria). Inútil apenas
-hay más de una instancia, que es exactamente lo que pasa en un despliegue serverless.
+*Alternativa descartada:* un bloqueo en memoria de la aplicación. Deja de servir apenas hay
+más de una instancia, que es justamente lo que ocurre en un despliegue serverless.
 
 ---
 
 ## 3. Otras decisiones de criterio
 
-- **Postgres en vez de MySQL.** El enunciado acepta ambos. Elegí PostgreSQL porque el free
-  tier de Neon **despierta solo** tras la inactividad, mientras que el MySQL gratuito de
-  Aiven se apaga y hay que reencenderlo a mano — riesgo directo sobre el requisito
-  "desplegado y funcionando" cuando el link se abre días después. La app usa Prisma, así que el
-  cambio a MySQL es el `provider` del datasource, `@db.VarChar(191)` en los campos
-  indexados y regenerar la migración inicial: unos diez minutos.
-- **Monolito, un repo, un despliegue.** Lo que se evalúa es el modelo, las reglas y que esté
-  en línea. Separar backend y frontend habría duplicado infraestructura sin sumar puntos.
+- **PostgreSQL en vez de MySQL.** El enunciado acepta ambos. Elegí PostgreSQL porque el plan
+  gratuito de Neon reactiva la base sola tras la inactividad, mientras que el MySQL gratuito
+  de Aiven se apaga y hay que encenderlo a mano desde la consola. Como la prueba se evalúa
+  días después de entregarla, eso era un riesgo directo sobre el requisito de que esté
+  desplegada y funcionando. El cambio a MySQL sería el `provider` del datasource,
+  `@db.VarChar(191)` en los campos indexados y regenerar la migración inicial.
+- **Monolito, un repositorio, un despliegue.** Lo que se evalúa es el modelo, las reglas y
+  que la aplicación esté en línea. Separar backend y frontend habría duplicado
+  infraestructura sin aportar a eso.
 - **Reglas en TypeScript puro, sin ORM.** `src/domain/` no importa Prisma ni Next: recibe
-  datos planos y devuelve `Violation[]`. Esto hace que las reglas se testeen en milisegundos
-  y —más importante— que se puedan leer y discutir sin conocer el framework.
-- **Sin *early return* en el motor.** La regla 11 obliga a mostrar todas las razones, así que
-  la validación acumula y nunca corta al primer problema. Es una decisión de diseño, no un
-  detalle: cortar en la primera es el bug clásico de este tipo de sistemas.
-- **Autenticación mínima con roles.** Sin identidad no existe "autorización de supervisor",
-  así que hay login con tres roles (`SUPERVISOR`, `PLANNER`, `VIEWER`). No hay recuperación
-  de contraseña ni gestión de usuarios: no aporta al problema.
-- **Zona horaria `America/Lima`, almacenamiento en UTC**, fecha del turno como `date` pura.
-- **Un solo lugar donde nace el error, y una línea de log por resultado.** Todas las
-  respuestas de error salen de `toErrorResponse()`, así que la forma
-  `{ error: { code, message, violations } }` no depende de que cada endpoint se acuerde. Ahí
+  datos planos y devuelve `Violation[]`. Así las reglas se testean en milisegundos y se
+  pueden leer sin conocer el framework.
+- **Sin salida temprana en el motor de reglas.** La regla 11 pide mostrar todas las razones,
+  así que la validación las acumula y nunca corta en la primera.
+- **Autenticación mínima con roles.** Sin identidad no puede existir la autorización de un
+  supervisor, así que hay login con tres roles (`SUPERVISOR`, `PLANNER`, `VIEWER`). No hay
+  recuperación de contraseña ni gestión de usuarios porque no aportan al problema.
+- **Zona horaria `America/Lima`, almacenamiento en UTC**, y la fecha del turno como `date`
+  sin hora.
+- **Un solo lugar donde se construyen los errores y una línea de log por resultado.** Todas
+  las respuestas de error salen de `toErrorResponse()`, así que el formato
+  `{ error: { code, message, violations } }` no depende de que cada endpoint lo repita. Ahí
   mismo se emite una línea JSON con el `requestId`, el usuario y los códigos de violación, y
-  ese identificador vuelve en la cabecera `x-request-id`: con el número que le aparece al
-  usuario se encuentra la línea exacta. Los rechazos de negocio se registran como `warn` y
-  no como `error`, porque son funcionamiento normal, no averías.
+  ese identificador vuelve en la cabecera `x-request-id`, de modo que con el número que ve el
+  usuario se puede ubicar la línea en los logs. Los rechazos de negocio se registran como
+  `warn` y no como `error`, porque son parte del funcionamiento normal.
 
 ---
 
 ## 4. Qué dejé fuera
 
-Con criterio de "el núcleo bien resuelto antes que todo a medias":
+Prioricé resolver bien el núcleo antes que cubrir todo parcialmente:
 
 | Fuera | Por qué |
 |---|---|
-| Notificaciones por correo/WhatsApp de las alertas | Las alertas existen y se ven en el tablero; el canal de salida es infraestructura, no reglas. |
-| Calendario con drag & drop para reprogramar turnos | Alto costo en UI, cero peso en la evaluación. |
-| Gestión de usuarios desde la interfaz | Tres usuarios sembrados alcanzan para demostrar los roles. |
-| Reportes exportables (Excel/PDF) y KPIs históricos | Los datos están modelados para soportarlos (ledger, `overdueHours`, desvíos); construirlos es trabajo posterior. |
-| Órdenes de trabajo, repuestos, costos de mantenimiento | Es otro dominio (un CMMS completo), fuera del enunciado. |
-| Multi-tenant / varias operaciones mineras | No pedido; agregaría una dimensión a todas las tablas sin aportar. |
-| Pruebas E2E con Playwright | Los flujos críticos están cubiertos por tests de integración contra base real. |
-| Auditoría genérica de todos los cambios | Hay traza específica en lo que importa (horómetro, excepciones, cierres). Una tabla de auditoría universal era más ruido que valor en 7 días. |
+| Notificaciones por correo o WhatsApp de las alertas | Las alertas existen y se ven en el tablero. El canal de salida es infraestructura y no cambia las reglas. |
+| Calendario con arrastrar y soltar para reprogramar turnos | Costo alto en interfaz y el enunciado no evalúa diseño. |
+| Gestión de usuarios desde la interfaz | Con los tres usuarios sembrados alcanza para demostrar los roles. |
+| Reportes exportables (Excel/PDF) y KPIs históricos | Los datos ya están modelados para soportarlos (ledger, `overdueHours`, desvíos); falta la capa de reportes. |
+| Órdenes de trabajo, repuestos y costos de mantenimiento | Es otro dominio, un CMMS completo, fuera del enunciado. |
+| Multi-tenant o varias operaciones mineras | No se pide y agregaría una dimensión a todas las tablas. |
+| Pruebas end to end con Playwright | Los flujos críticos ya están cubiertos con tests de integración contra una base real. |
+| Auditoría genérica de todos los cambios | Hay traza específica donde importa: horómetro, excepciones y cierres. Una tabla de auditoría universal aportaba poco en el tiempo disponible. |
 
 ---
 
 ## 5. Qué haría con más tiempo
 
-1. **Reprogramación asistida:** cuando un equipo se bloquea, sugerir automáticamente equipos
-   equivalentes disponibles con operador certificado para ese turno. Es el paso natural
-   entre "avisar" y "resolver".
-2. **Proyección con horas reales promedio** en vez de horas planificadas: usar el histórico
-   de desvío por equipo o frente para estimar mejor cuándo se cruza el umbral.
-3. **Job programado** (cron diario) que recalcule riesgos y genere el resumen de la mañana
-   antes del cambio de guardia, con envío por correo.
-4. **Mantenimiento preventivo por calendario**, no solo por horómetro (hay componentes que
-   se sirven por tiempo aunque el equipo esté parado).
+1. **Reprogramación asistida:** cuando un equipo se bloquea, sugerir equipos equivalentes
+   disponibles con operador certificado para ese turno. Es el paso siguiente entre avisar y
+   resolver.
+2. **Proyección con horas reales promedio** en lugar de horas planificadas, usando el
+   histórico de desvío por equipo o frente para estimar mejor cuándo se cruza el umbral.
+3. **Tarea programada diaria** que recalcule riesgos y genere el resumen de la mañana antes
+   del cambio de guardia.
+4. **Mantenimiento preventivo por calendario** además de por horómetro, porque hay
+   componentes que se sirven por tiempo aunque el equipo esté detenido.
 5. **Métricas de operación:** disponibilidad mecánica, utilización, cumplimiento del plan de
-   mantenimiento, horas por operador. Los datos ya están; falta la capa de reportes.
-6. **Observabilidad:** logs estructurados a un servicio externo, trazas y alertas de errores
-   (hoy solo hay logs JSON en la plataforma).
-7. **Modo offline/campo:** captura de horas reales desde el frente con sincronización, que es
-   el punto donde estos sistemas suelen morir en la práctica.
+   mantenimiento y horas por operador. Los datos ya están.
+6. **Observabilidad:** envío de los logs estructurados a un servicio externo, con trazas y
+   alertas de error.
+7. **Captura offline en campo:** registro de horas reales desde el frente con sincronización
+   posterior, que suele ser el punto donde estos sistemas fallan en la práctica.
 
 ---
 
 ## 6. Uso de inteligencia artificial
 
-Trabajé con un asistente de IA (Claude) como herramienta de apoyo durante el desarrollo, del
-mismo modo que uso la documentación oficial o un colega para contrastar una idea antes de
-decidir. Los usos más concretos fueron ampliar la batería de casos borde de los tests,
-acelerar el código repetitivo de la interfaz y discutir alternativas de modelado.
+Usé un asistente de IA (Claude) como apoyo durante el desarrollo, igual que uso la
+documentación oficial o la consulta con un colega para contrastar una idea antes de decidir.
+Los usos más concretos fueron ampliar los casos borde de los tests, acelerar el código
+repetitivo de la interfaz y discutir alternativas de modelado.
 
 Las decisiones de fondo —el modelo de datos, la política de umbral anclado, cómo se resuelve
-la concurrencia, qué queda fuera del alcance— son las que están argumentadas en este
-documento, con sus alternativas descartadas. Todo lo que entró al repositorio pasó por
-revisión y quedó cubierto por tests: no hay una línea que no pueda explicar y defender.
+la concurrencia y qué queda fuera del alcance— son las que están argumentadas en este
+documento, con sus alternativas descartadas. Todo lo que entró al repositorio lo revisé y
+quedó cubierto por tests: no hay una línea que no pueda explicar.
