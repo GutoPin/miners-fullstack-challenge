@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { postJson } from '@/src/components/api';
 import { formatHoras } from '@/src/components/format';
+import { Icon, Spinner } from '@/src/components/icons';
 import { Aviso, boton, campo } from '@/src/components/ui';
 
 interface Resultado {
@@ -113,6 +114,7 @@ export function RegistrarMantenimiento({
           disabled={enviando || !responsible.trim()}
           className={boton.primario}
         >
+          {enviando ? <Spinner /> : <Icon name="taller" />}
           {enviando ? 'Registrando…' : 'Registrar y liberar equipo'}
         </button>
       </form>

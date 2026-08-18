@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { postJson, type ApiError } from '@/src/components/api';
 import { formatHoras } from '@/src/components/format';
 import { PanelViolaciones } from '@/src/components/violations-panel';
+import { Icon, Spinner } from '@/src/components/icons';
 import { Aviso, boton, tabla } from '@/src/components/ui';
 
 export interface FilaCierre {
@@ -164,6 +165,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
           onClick={() => void cerrar()}
           className={boton.primario}
         >
+          {enviando ? <Spinner /> : <Icon name="visto" />}
           {enviando ? 'Cerrando…' : 'Cerrar turno y sumar horas al horómetro'}
         </button>
       </div>

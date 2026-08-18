@@ -5,7 +5,9 @@ import { auth } from '@/src/auth';
 
 import { HistorialHorometro } from '@/src/components/charts';
 import { ESTADO_EQUIPO, formatHoras } from '@/src/components/format';
-import { Aviso, Badge, BarraHorometro, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
+import { Icon } from '@/src/components/icons';
+import { IrAPanel } from '@/src/components/jump-link';
+import { Aviso, Badge, BarraHorometro, Encabezado, Panel, Vacio, boton, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toOperationalDate } from '@/src/services/dates';
 import { RegistrarMantenimiento } from './register-maintenance-form';
@@ -77,10 +79,19 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
           titulo={`${equipo.code} está bloqueado por horómetro.`}
           className="mb-6"
         >
-          Alcanzó las {formatHoras(umbral)} h de su umbral y no se puede asignar a ningún
-          turno. {puedeOperar
-            ? 'Registre el mantenimiento en el formulario de abajo para liberarlo: al hacerlo vuelven a estar activas las asignaciones que quedaron en riesgo por este bloqueo.'
-            : 'Un planificador o supervisor debe registrar el mantenimiento para liberarlo.'}
+          <p>
+            Alcanzó las {formatHoras(umbral)} h de su umbral y no se puede asignar a ningún
+            turno.{' '}
+            {puedeOperar
+              ? 'Al registrar el mantenimiento se libera y vuelven a estar activas las asignaciones que quedaron en riesgo por este bloqueo.'
+              : 'Un planificador o supervisor debe registrar el mantenimiento para liberarlo.'}
+          </p>
+          {puedeOperar && (
+            <IrAPanel objetivo="mantenimiento" className={`${boton.secundario} mt-3`}>
+              <Icon name="taller" />
+              Registrar mantenimiento
+            </IrAPanel>
+          )}
         </Aviso>
       )}
 
@@ -182,9 +193,11 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
 
       {puedeOperar && equipo.status !== 'OUT_OF_SERVICE' && (
         <Panel
+          id="mantenimiento"
+          icono="taller"
           titulo="Registrar mantenimiento"
           descripcion="Libera el equipo, fija el próximo umbral y deja constancia del responsable"
-          className="mt-6"
+          className={`scroll-mt-6 ${equipo.status === 'BLOCKED' ? 'mt-6 border-accent' : 'mt-6'}`}
         >
           <RegistrarMantenimiento
             equipmentId={equipo.id}

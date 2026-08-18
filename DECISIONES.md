@@ -277,5 +277,4 @@ repetitivo de la interfaz y discutir alternativas de modelado.
 
 Las decisiones de fondo —el modelo de datos, la política de umbral anclado, cómo se resuelve
 la concurrencia y qué queda fuera del alcance— son las que están argumentadas en este
-documento, con sus alternativas descartadas. Todo lo que entró al repositorio lo revisé y
-quedó cubierto por tests: no hay una línea que no pueda explicar.
+documento, con sus alternativas descartadas.

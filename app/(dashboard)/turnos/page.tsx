@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { ESTADO_TURNO, JORNADA, diasHasta, formatHoras } from '@/src/components/format';
-import { Aviso, Badge, Encabezado, Panel, Vacio, boton, campo, tabla } from '@/src/components/ui';
+import { Icon } from '@/src/components/icons';
+import { BotonEnviar } from '@/src/components/submit-button';
+import { Aviso, Badge, Encabezado, Panel, Vacio, campo, tabla } from '@/src/components/ui';
 import { auth, requireRole } from '@/src/auth';
 import { prisma } from '@/src/db/prisma';
 import type { Journey } from '@/src/domain/types';
@@ -120,9 +122,9 @@ export default async function TurnosPage({
               />
             </label>
 
-            <button type="submit" className={boton.primario}>
+            <BotonEnviar pendiente="Creando…" icono="mas">
               Crear turno
-            </button>
+            </BotonEnviar>
           </form>
 
           {error && (
@@ -204,9 +206,10 @@ export default async function TurnosPage({
                       <td className={tabla.td}>
                         <Link
                           href={`/turnos/${t.id}`}
-                          className="border border-line px-3 py-1.5 text-xs whitespace-nowrap hover:border-accent hover:text-accent"
+                          className="inline-flex items-center gap-1.5 border border-line px-3 py-1.5 text-xs whitespace-nowrap hover:border-accent hover:text-accent"
                         >
                           {t.status === 'PLANNED' ? 'Asignar o cerrar' : 'Ver detalle'}
+                          <Icon name="flecha" className="size-3.5" />
                         </Link>
                       </td>
                     </tr>

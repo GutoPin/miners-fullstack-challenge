@@ -10,6 +10,8 @@ import {
   diasHasta,
   formatHoras,
 } from '@/src/components/format';
+import { Icon } from '@/src/components/icons';
+import { IrAPanel } from '@/src/components/jump-link';
 import { Aviso, Badge, Encabezado, Panel, Vacio, boton, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toIsoDate } from '@/src/services/dates';
@@ -58,6 +60,11 @@ export default async function TurnoPage({
   const planificado = turno.status === 'PLANNED';
   const horasPlan = vigentes.reduce((t, a) => t + Number(a.plannedHours), 0);
 
+  const puedeAsignar = planificado && puedeOperar;
+  // an empty shift exists to be filled: the form goes first and the empty table is not drawn
+  // at all, because a panel that only says "there is nothing here" pushes the work off-screen
+  const soloFormulario = turno.assignments.length === 0 && puedeAsignar;
+
   return (
     <>
       <Encabezado
@@ -87,7 +94,9 @@ export default async function TurnoPage({
         ))}
       </dl>
 
-      {nuevo && (
+      {/* the flag survives every router.refresh(), so it is only honoured while it is true:
+          once the shift has an assignment or is closed, "just created" stopped being news */}
+      {nuevo && soloFormulario && (
         <Aviso tono="ok" titulo="Turno creado." className="mb-6">
           Ya puede asignar equipos y operadores. Cada asignación hereda las{' '}
           {formatHoras(turno.plannedHours)} h de duración del turno.
@@ -105,24 +114,16 @@ export default async function TurnoPage({
         </Aviso>
       )}
 
+      {!soloFormulario && (
       <Panel
         id="asignaciones"
+        icono="turnos"
         titulo={`Asignaciones (${vigentes.length} vigentes)`}
         descripcion="Qué equipo opera quién en este turno"
         className="scroll-mt-6"
       >
         {turno.assignments.length === 0 ? (
-          <Vacio
-            accion={
-              planificado && puedeOperar ? (
-                <a href="#asignar" className={boton.secundario}>
-                  Crear la primera asignación
-                </a>
-              ) : undefined
-            }
-          >
-            Este turno todavía no tiene asignaciones.
-          </Vacio>
+          <Vacio>Este turno no tiene asignaciones.</Vacio>
         ) : (
           <div className={tabla.wrapper}>
             <table className={tabla.table}>
@@ -198,13 +199,15 @@ export default async function TurnoPage({
           </div>
         )}
       </Panel>
+      )}
 
-      {planificado && puedeOperar && (
+      {puedeAsignar && (
         <Panel
           id="asignar"
+          icono="mas"
           titulo="Nueva asignación"
           descripcion="Se valida contra las 12 reglas antes de guardar"
-          className="mt-6 scroll-mt-6"
+          className={`scroll-mt-6 ${soloFormulario ? 'border-accent' : 'mt-6'}`}
         >
           <AsignarForm
             shiftId={turno.id}
@@ -237,9 +240,10 @@ export default async function TurnoPage({
         </Panel>
       )}
 
-      {planificado && puedeOperar && (
+      {puedeAsignar && (
         <Panel
           id="cerrar"
+          icono="visto"
           titulo="Cerrar turno"
           descripcion="Registra las horas reales y las suma al horómetro de cada equipo"
           className="mt-6 scroll-mt-6"
@@ -255,16 +259,21 @@ export default async function TurnoPage({
                 registre el mantenimiento del equipo: el turno no se cierra en silencio con
                 algo que alguien tiene que decidir.
               </p>
-              <a href="#asignaciones" className="mt-2 inline-block text-sm underline">
+              <IrAPanel
+                objetivo="asignaciones"
+                className={`${boton.secundario} mt-3 bg-surface`}
+              >
+                <Icon name="flecha" />
                 Ir a las asignaciones
-              </a>
+              </IrAPanel>
             </Aviso>
           ) : vigentes.length === 0 ? (
             <Vacio
               accion={
-                <a href="#asignar" className={boton.secundario}>
-                  Crear una asignación
-                </a>
+                <IrAPanel objetivo="asignar" className={boton.secundario}>
+                  <Icon name="mas" />
+                  Ir al formulario de asignación
+                </IrAPanel>
               }
             >
               No hay nada que cerrar: este turno no tiene asignaciones vigentes.

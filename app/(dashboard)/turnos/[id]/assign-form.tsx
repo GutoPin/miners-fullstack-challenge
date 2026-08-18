@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { postJson, type ApiError } from '@/src/components/api';
 import { PanelViolaciones } from '@/src/components/violations-panel';
 import { formatHoras } from '@/src/components/format';
+import { Icon, Spinner } from '@/src/components/icons';
 import { Aviso, BarraHorometro, boton, campo } from '@/src/components/ui';
 import type { Violation } from '@/src/domain/rules/violation';
 
@@ -218,6 +219,7 @@ export function AsignarForm({
           disabled={enviando || !equipmentId || !operatorId}
           className={boton.primario}
         >
+          {enviando ? <Spinner /> : <Icon name="visto" />}
           {enviando ? 'Guardando…' : 'Validar y asignar'}
         </button>
       </form>
@@ -301,6 +303,7 @@ export function AsignarForm({
                 onClick={() => setPidiendoMotivo(true)}
                 className={boton.excepcion}
               >
+                <Icon name="bloqueado" />
                 Forzar con autorización
               </button>
               <span className="text-xs text-muted">
@@ -335,6 +338,7 @@ export function AsignarForm({
                   onClick={() => void enviar(motivo.trim())}
                   className={boton.peligro}
                 >
+                  {enviando ? <Spinner /> : <Icon name="visto" />}
                   {enviando ? 'Autorizando…' : 'Autorizar y asignar'}
                 </button>
                 <button
@@ -342,6 +346,7 @@ export function AsignarForm({
                   onClick={() => setPidiendoMotivo(false)}
                   className={boton.secundario}
                 >
+                  <Icon name="cerrar" />
                   Cancelar
                 </button>
               </div>

@@ -36,6 +36,13 @@ export function formatHoras(value: number | { toString(): string }): string {
   return horas.format(Number(value));
 }
 
+const semana = new Intl.DateTimeFormat('es-PE', { weekday: 'short', timeZone: 'UTC' });
+
+/** 'lun' from an operational date; formatted in UTC because the string is already local */
+export function diaSemana(value: string): string {
+  return semana.format(new Date(`${value}T00:00:00.000Z`)).replace('.', '');
+}
+
 /**
  * Whole days between today and a `@db.Date`; negative means past. "Today" is the calendar
  * day in Lima, not the server's local midnight: the process runs in UTC and `TZ` cannot be

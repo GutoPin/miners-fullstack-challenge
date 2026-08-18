@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { DisponibilidadPorDia } from '@/src/components/charts';
+import { Icon, type NombreIcono } from '@/src/components/icons';
 import { Aviso, Badge, BarraHorometro, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import {
   ESTADO_EQUIPO,
@@ -16,11 +17,11 @@ export const dynamic = 'force-dynamic';
 
 const DIAS = 7;
 
-const ALERTA: Record<string, string> = {
-  MAINTENANCE_DUE_SOON: 'Mantenimiento',
-  ASSIGNMENT_AT_RISK: 'Asignación en riesgo',
-  CERT_EXPIRING_BEFORE_SHIFT: 'Certificación',
-  OVERRIDE_USED: 'Excepción autorizada',
+const ALERTA: Record<string, { label: string; icono: NombreIcono }> = {
+  MAINTENANCE_DUE_SOON: { label: 'Mantenimiento', icono: 'taller' },
+  ASSIGNMENT_AT_RISK: { label: 'Asignación en riesgo', icono: 'alerta' },
+  CERT_EXPIRING_BEFORE_SHIFT: { label: 'Certificación', icono: 'operadores' },
+  OVERRIDE_USED: { label: 'Excepción autorizada', icono: 'bloqueado' },
 };
 
 export default async function TableroPage() {
@@ -56,26 +57,59 @@ export default async function TableroPage() {
 
   const abiertos = turnos.filter((t) => t.status === 'PLANNED').length;
   const cruzan = proyeccion.filter((f) => f.projection.status === 'WILL_CROSS').length;
+  const detenidos = (porEstado.BLOCKED ?? 0) + (porEstado.IN_MAINTENANCE ?? 0);
 
   const ventana = Array.from({ length: DIAS }, (_, i) =>
     toOperationalDate(new Date(ahora.getTime() + i * 86_400_000)),
   );
 
   const disponibilidad = ventana.map((fecha) => {
-    const detenidos = proyeccion.filter((f) => {
+    const fuera = proyeccion.filter((f) => {
       if (f.status !== 'AVAILABLE') return true;
       if (f.projection.status === 'ALREADY_BLOCKED') return true;
       return f.projection.status === 'WILL_CROSS' && f.projection.crossesOn <= fecha;
     }).length;
 
-    return { fecha, detenidos, disponibles: proyeccion.length - detenidos };
+    return { fecha, detenidos: fuera, disponibles: proyeccion.length - fuera };
   });
 
-  const indicadores = [
-    { t: 'Equipos disponibles', v: porEstado.AVAILABLE ?? 0, href: '/equipos' },
-    { t: 'Bloqueados o en taller', v: (porEstado.BLOCKED ?? 0) + (porEstado.IN_MAINTENANCE ?? 0), href: '/equipos' },
-    { t: 'Turnos sin cerrar', v: abiertos, href: '/turnos' },
-    { t: 'Cruzan umbral en 7 días', v: cruzan, href: '/proyeccion' },
+  const indicadores: {
+    t: string;
+    v: number;
+    de?: number;
+    icono: NombreIcono;
+    href: string;
+    alerta: boolean;
+  }[] = [
+    {
+      t: 'Equipos disponibles',
+      v: porEstado.AVAILABLE ?? 0,
+      de: equipos.length,
+      icono: 'equipos',
+      href: '/equipos',
+      alerta: false,
+    },
+    {
+      t: 'Bloqueados o en taller',
+      v: detenidos,
+      icono: 'bloqueado',
+      href: '/equipos',
+      alerta: detenidos > 0,
+    },
+    {
+      t: 'Turnos sin cerrar',
+      v: abiertos,
+      icono: 'turnos',
+      href: '/turnos',
+      alerta: false,
+    },
+    {
+      t: 'Cruzan umbral en 7 días',
+      v: cruzan,
+      icono: 'proyeccion',
+      href: '/proyeccion',
+      alerta: cruzan > 0,
+    },
   ];
 
   return (
@@ -89,15 +123,33 @@ export default async function TableroPage() {
       <ul className="mb-6 grid grid-cols-2 border border-line bg-surface lg:grid-cols-4">
         {indicadores.map((c) => (
           <li key={c.t} className="border-r border-b border-line last:border-r-0">
-            <Link href={c.href} className="block px-4 py-4 hover:bg-canvas">
-              <span className="block font-mono text-3xl font-medium">{c.v}</span>
-              <span className="mt-1 block text-xs text-muted">{c.t}</span>
+            <Link href={c.href} className="group block px-4 py-4 hover:bg-canvas">
+              <span className="flex items-center justify-between text-muted">
+                <Icon name={c.icono} className={`size-4.5 ${c.alerta ? 'text-accent' : ''}`} />
+                <Icon
+                  name="flecha"
+                  className="size-4 opacity-0 transition-opacity group-hover:opacity-100"
+                />
+              </span>
+
+              <span className="mt-3 flex items-baseline gap-1">
+                <span
+                  className={`font-mono text-3xl leading-none font-medium ${c.alerta ? 'text-accent' : ''}`}
+                >
+                  {c.v}
+                </span>
+                {c.de !== undefined && (
+                  <span className="font-mono text-sm text-muted">/ {c.de}</span>
+                )}
+              </span>
+              <span className="mt-1.5 block text-xs text-muted">{c.t}</span>
             </Link>
           </li>
         ))}
       </ul>
 
       <Panel
+        icono="alerta"
         titulo={`Requiere atención (${activas.length})`}
         descripcion={
           criticas > 0
@@ -113,47 +165,58 @@ export default async function TableroPage() {
           </Aviso>
         ) : (
           <ul className="divide-y divide-line">
-            {activas.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
-                <Badge tono={a.severity === 'CRITICAL' ? 'bloqueo' : 'aviso'}>
-                  {ALERTA[a.type] ?? a.type}
-                </Badge>
-                <p className="flex-1 text-sm">{a.message}</p>
-                {a.equipment && (
-                  <Link
-                    href={`/equipos/${a.equipmentId}`}
-                    className="border border-line px-3 py-1.5 text-xs whitespace-nowrap hover:border-accent hover:text-accent"
-                  >
-                    Abrir {a.equipment.code}
-                  </Link>
-                )}
-              </li>
-            ))}
+            {activas.map((a) => {
+              const tipo = ALERTA[a.type];
+
+              return (
+                <li key={a.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
+                  <Badge tono={a.severity === 'CRITICAL' ? 'bloqueo' : 'aviso'}>
+                    {tipo?.label ?? a.type}
+                  </Badge>
+                  <p className="flex-1 text-sm">{a.message}</p>
+                  {a.equipment && (
+                    <Link
+                      href={`/equipos/${a.equipmentId}`}
+                      className="inline-flex items-center gap-1.5 border border-line px-3 py-1.5 text-xs whitespace-nowrap hover:border-accent hover:text-accent"
+                    >
+                      Abrir {a.equipment.code}
+                      <Icon name="flecha" className="size-3.5" />
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Panel>
 
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
         <Panel
+          icono="proyeccion"
           titulo="Flota disponible los próximos 7 días"
           descripcion="Según los turnos ya programados, sin ningún mantenimiento de por medio"
           acciones={
-            <Link href="/proyeccion" className="text-xs underline hover:text-accent">
+            <Link
+              href="/proyeccion"
+              className="inline-flex items-center gap-1.5 text-xs underline hover:text-accent"
+            >
               Ver proyección
+              <Icon name="flecha" className="size-3.5" />
             </Link>
           }
         >
           <DisponibilidadPorDia dias={disponibilidad} />
         </Panel>
 
-        <Panel titulo="Próximos turnos" descripcion="Abra uno para asignar o cerrarlo">
+        <Panel icono="turnos" titulo="Próximos turnos" descripcion="Abra uno para asignar o cerrarlo">
           {turnos.length === 0 ? (
             <Vacio
               accion={
                 <Link
                   href="/turnos"
-                  className="border border-line px-3 py-2 text-sm hover:border-accent hover:text-accent"
+                  className="inline-flex items-center gap-2 border border-line px-3 py-2 text-sm hover:border-accent hover:text-accent"
                 >
+                  <Icon name="mas" className="size-4" />
                   Crear turno
                 </Link>
               }
@@ -189,11 +252,16 @@ export default async function TableroPage() {
       </div>
 
       <Panel
+        icono="equipos"
         titulo="Flota"
         descripcion="Horómetro contra el umbral que bloquea cada unidad"
         acciones={
-          <Link href="/equipos" className="text-xs underline hover:text-accent">
+          <Link
+            href="/equipos"
+            className="inline-flex items-center gap-1.5 text-xs underline hover:text-accent"
+          >
             Ver detalle
+            <Icon name="flecha" className="size-3.5" />
           </Link>
         }
         className="mt-6"

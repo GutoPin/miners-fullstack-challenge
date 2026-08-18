@@ -41,6 +41,12 @@ body {
   outline-offset: 2px;
 }
 
+/* the panel a jump link points at: without this the page scrolls and nothing looks different */
+:target {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
 /* no 300 ms tap delay and no grey flash on touch: the console is used on tablets in the field */
 :where(a, button, input, select, textarea, label) {
   touch-action: manipulation;

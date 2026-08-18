@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 
 import type { Tono } from './format';
+import { Icon, type NombreIcono } from './icons';
 
 const TONOS: Record<Tono, string> = {
   ok: 'border-emerald-700/30 bg-emerald-50 text-emerald-900',
@@ -44,6 +45,7 @@ export function Encabezado({
 
 export function Panel({
   id,
+  icono,
   titulo,
   descripcion,
   acciones,
@@ -52,6 +54,7 @@ export function Panel({
 }: {
   /** anchor target, for screens whose panels link to each other */
   id?: string;
+  icono?: NombreIcono;
   titulo?: string;
   descripcion?: string;
   acciones?: ReactNode;
@@ -62,9 +65,12 @@ export function Panel({
     <section id={id} className={`border border-line bg-surface ${className}`}>
       {titulo && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-          <div>
-            <h2 className="rotulo">{titulo}</h2>
-            {descripcion && <p className="mt-0.5 text-xs text-muted">{descripcion}</p>}
+          <div className="flex min-w-0 items-start gap-2.5">
+            {icono && <Icon name={icono} className="mt-0.5 size-4 shrink-0 text-muted" />}
+            <div className="min-w-0">
+              <h2 className="rotulo">{titulo}</h2>
+              {descripcion && <p className="mt-0.5 text-xs text-muted">{descripcion}</p>}
+            </div>
           </div>
           {acciones}
         </div>
@@ -104,13 +110,13 @@ export function Aviso({
 // shared control classes: same idea as `tabla`, one place instead of a wrapper component
 export const boton = {
   primario:
-    'inline-flex min-h-11 items-center justify-center bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40',
+    'inline-flex min-h-11 items-center justify-center gap-2 bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40',
   secundario:
-    'inline-flex min-h-11 items-center justify-center border border-line bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40',
+    'inline-flex min-h-11 items-center justify-center gap-2 border border-line bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40',
   excepcion:
-    'inline-flex min-h-11 items-center justify-center border border-accent px-4 py-2.5 text-sm font-medium text-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40',
+    'inline-flex min-h-11 items-center justify-center gap-2 border border-accent px-4 py-2.5 text-sm font-medium text-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40',
   peligro:
-    'inline-flex min-h-11 items-center justify-center bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40',
+    'inline-flex min-h-11 items-center justify-center gap-2 bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40',
 };
 
 // native selects do not inherit the page colours on every platform, hence the explicit pair

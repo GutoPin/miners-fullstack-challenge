@@ -1,7 +1,10 @@
+import { Icon, type NombreIcono } from '@/src/components/icons';
+import { IrAPanel } from '@/src/components/jump-link';
+
 /**
  * What a planned shift still needs, in the order it needs it. A shift screen shows three
  * panels at once and nothing says which one is the user's turn; this strip does, and each
- * step links to its own panel.
+ * step jumps to its own panel and drops the cursor in its first field.
  */
 type Estado = 'hecho' | 'actual' | 'pendiente';
 
@@ -24,14 +27,21 @@ const ESTILO: Record<Estado, { caja: string; numero: string; etiqueta: string }>
 };
 
 export function Proceso({ asignadas, enRiesgo }: { asignadas: number; enRiesgo: number }) {
-  const pasos: { titulo: string; detalle: string; ancla: string; estado: Estado }[] = [
+  const pasos: {
+    titulo: string;
+    detalle: string;
+    objetivo: string;
+    icono: NombreIcono;
+    estado: Estado;
+  }[] = [
     {
       titulo: 'Asignar',
       detalle:
         asignadas === 0
           ? 'Todavía no hay ningún equipo asignado a este turno.'
           : `${asignadas} ${asignadas === 1 ? 'asignación vigente' : 'asignaciones vigentes'}. Puede agregar más.`,
-      ancla: '#asignar',
+      objetivo: 'asignar',
+      icono: 'mas',
       estado: asignadas === 0 ? 'actual' : 'hecho',
     },
     {
@@ -40,7 +50,8 @@ export function Proceso({ asignadas, enRiesgo }: { asignadas: number; enRiesgo: 
         enRiesgo > 0
           ? `${enRiesgo} ${enRiesgo === 1 ? 'asignación quedó en riesgo' : 'asignaciones quedaron en riesgo'} y bloquean el cierre.`
           : 'Ninguna asignación quedó en riesgo.',
-      ancla: '#asignaciones',
+      objetivo: asignadas === 0 ? 'asignar' : 'asignaciones',
+      icono: 'alerta',
       estado: enRiesgo > 0 ? 'actual' : asignadas === 0 ? 'pendiente' : 'hecho',
     },
     {
@@ -51,7 +62,8 @@ export function Proceso({ asignadas, enRiesgo }: { asignadas: number; enRiesgo: 
           : enRiesgo > 0
             ? 'Disponible cuando no queden asignaciones en riesgo.'
             : 'Registre las horas reales y súmelas al horómetro.',
-      ancla: '#cerrar',
+      objetivo: 'cerrar',
+      icono: 'visto',
       estado: asignadas > 0 && enRiesgo === 0 ? 'actual' : 'pendiente',
     },
   ];
@@ -64,9 +76,9 @@ export function Proceso({ asignadas, enRiesgo }: { asignadas: number; enRiesgo: 
 
           return (
             <li key={p.titulo}>
-              <a
-                href={p.ancla}
-                className={`flex h-full gap-3 border p-3 hover:border-accent ${s.caja}`}
+              <IrAPanel
+                objetivo={p.objetivo}
+                className={`group flex h-full gap-3 border p-3 hover:border-accent ${s.caja}`}
               >
                 <span
                   aria-hidden
@@ -74,14 +86,22 @@ export function Proceso({ asignadas, enRiesgo }: { asignadas: number; enRiesgo: 
                 >
                   {i + 1}
                 </span>
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-baseline gap-x-2">
                     <span className="text-sm font-medium">{p.titulo}</span>
                     <span className="rotulo">{s.etiqueta}</span>
                   </span>
                   <span className="mt-0.5 block text-xs text-muted">{p.detalle}</span>
                 </span>
-              </a>
+                <Icon
+                  name={p.estado === 'actual' ? p.icono : 'flecha'}
+                  className={`mt-0.5 size-4 shrink-0 ${
+                    p.estado === 'actual'
+                      ? 'text-accent'
+                      : 'text-muted opacity-0 transition-opacity group-hover:opacity-100'
+                  }`}
+                />
+              </IrAPanel>
             </li>
           );
         })}
