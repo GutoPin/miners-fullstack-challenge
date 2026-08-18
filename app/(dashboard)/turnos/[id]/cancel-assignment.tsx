@@ -30,7 +30,7 @@ export function CancelarAsignacion({ assignmentId, etiqueta }: { assignmentId: s
         type="button"
         disabled={enviando}
         onClick={() => void cancelar()}
-        className="text-xs text-muted underline hover:text-red-800 disabled:opacity-40"
+        className="border border-line px-3 py-1.5 text-xs whitespace-nowrap hover:border-red-700 hover:text-red-800 disabled:opacity-40"
       >
         {enviando ? 'Cancelando…' : 'Cancelar'}
       </button>

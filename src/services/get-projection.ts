@@ -18,6 +18,8 @@ export interface ProjectionRow {
   nextMaintenanceHours: number;
   /** scheduled shifts that fed the simulation */
   plannedShifts: number;
+  /** hours those shifts commit in total, to compare against the remaining margin */
+  plannedHours: number;
   projection: ProjectionResult;
 }
 
@@ -57,6 +59,7 @@ export async function getProjection(days = 7, today = new Date()): Promise<Proje
       currentHours: Number(equipment.currentHours),
       nextMaintenanceHours: Number(equipment.nextMaintenanceHours),
       plannedShifts: upcoming.length,
+      plannedHours: upcoming.reduce((total, u) => total + u.plannedHours, 0),
       projection: projectMaintenance(
         {
           id: equipment.id,

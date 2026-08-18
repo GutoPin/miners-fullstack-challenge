@@ -39,9 +39,31 @@ export default async function AuditoriaPage() {
         descripcion="Quién forzó qué y con qué motivo, y todo movimiento del horómetro con su origen. Si algo se saltó una regla o cambió una cifra, tiene que poder rastrearse hasta aquí."
       />
 
-      <Panel titulo={`Excepciones autorizadas (${excepciones.length})`}>
+      <dl className="mb-6 grid grid-cols-2 border border-line bg-surface sm:grid-cols-3">
+        {[
+          { t: 'Excepciones firmadas', v: excepciones.length },
+          { t: 'Movimientos de horómetro', v: movimientos.length },
+          {
+            t: 'Equipos con movimiento',
+            v: new Set(movimientos.map((h) => h.equipmentId)).size,
+          },
+        ].map((c) => (
+          <div key={c.t} className="border-r border-b border-line px-4 py-4 last:border-r-0">
+            <dd className="font-mono text-2xl font-medium">{c.v}</dd>
+            <dt className="mt-1 text-xs text-muted">{c.t}</dt>
+          </div>
+        ))}
+      </dl>
+
+      <Panel
+        titulo={`Excepciones autorizadas (${excepciones.length})`}
+        descripcion="Reglas que un supervisor decidió saltarse, con su motivo"
+      >
         {excepciones.length === 0 ? (
-          <Vacio>No se ha forzado ninguna asignación.</Vacio>
+          <Vacio>
+            No se ha forzado ninguna asignación. Cuando un supervisor autorice una excepción,
+            aquí queda su nombre, el motivo y las reglas que se saltaron.
+          </Vacio>
         ) : (
           <ul className="divide-y divide-line">
             {excepciones.map((o) => {
@@ -92,7 +114,11 @@ export default async function AuditoriaPage() {
         )}
       </Panel>
 
-      <Panel titulo="Bitácora de horómetro (últimos 100 movimientos)" className="mt-6">
+      <Panel
+        titulo="Bitácora de horómetro"
+        descripcion="Últimos 100 movimientos, del más reciente al más antiguo"
+        className="mt-6"
+      >
         {movimientos.length === 0 ? (
           <Vacio>Sin movimientos registrados.</Vacio>
         ) : (

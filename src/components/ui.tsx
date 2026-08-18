@@ -43,33 +43,105 @@ export function Encabezado({
 }
 
 export function Panel({
+  id,
   titulo,
+  descripcion,
+  acciones,
   children,
   className = '',
 }: {
+  /** anchor target, for screens whose panels link to each other */
+  id?: string;
   titulo?: string;
+  descripcion?: string;
+  acciones?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={`border border-line bg-surface ${className}`}>
+    <section id={id} className={`border border-line bg-surface ${className}`}>
       {titulo && (
-        <h2 className="rotulo border-b border-line px-4 py-2.5">{titulo}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+          <div>
+            <h2 className="rotulo">{titulo}</h2>
+            {descripcion && <p className="mt-0.5 text-xs text-muted">{descripcion}</p>}
+          </div>
+          {acciones}
+        </div>
       )}
       {children}
     </section>
   );
 }
 
-/** hourmeter bar: the ratio reads faster as a shape than as two numbers */
-export function BarraHorometro({ actual, umbral }: { actual: number; umbral: number }) {
-  const porcentaje = umbral > 0 ? Math.min(100, (actual / umbral) * 100) : 0;
-  const color =
-    porcentaje >= 100 ? 'bg-red-700' : porcentaje >= 90 ? 'bg-amber-600' : 'bg-emerald-700';
+/**
+ * Callout for anything the screen has to say back to the user: what was saved, what is
+ * missing, why an action is unavailable. `ok` announces politely because it follows an
+ * action the user just took; `bloqueo` is left to the caller, which usually wants `alert`.
+ */
+export function Aviso({
+  tono,
+  titulo,
+  children,
+  className = '',
+}: {
+  tono: Tono;
+  titulo?: string;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      role={tono === 'ok' ? 'status' : undefined}
+      className={`border px-4 py-3 text-sm ${TONOS[tono]} ${className}`}
+    >
+      {titulo && <p className="font-medium">{titulo}</p>}
+      {children && <div className={titulo ? 'mt-1' : ''}>{children}</div>}
+    </div>
+  );
+}
+
+// shared control classes: same idea as `tabla`, one place instead of a wrapper component
+export const boton = {
+  primario:
+    'inline-flex min-h-11 items-center justify-center bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40',
+  secundario:
+    'inline-flex min-h-11 items-center justify-center border border-line bg-surface px-4 py-2.5 text-sm font-medium hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40',
+  excepcion:
+    'inline-flex min-h-11 items-center justify-center border border-accent px-4 py-2.5 text-sm font-medium text-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40',
+  peligro:
+    'inline-flex min-h-11 items-center justify-center bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40',
+};
+
+// native selects do not inherit the page colours on every platform, hence the explicit pair
+export const campo = {
+  input: 'block w-full border border-line bg-canvas px-3 py-2.5 text-sm text-ink',
+  numero: 'block border border-line bg-canvas px-3 py-2.5 text-right font-mono text-sm text-ink',
+};
+
+/**
+ * Hourmeter bullet: the fill is the hourmeter, the tick is the threshold that blocks the
+ * unit, and the amber band is the last 10 % of the cycle. Shape first, numbers next to it.
+ */
+export function BarraHorometro({
+  actual,
+  umbral,
+  ancho = 'w-28',
+}: {
+  actual: number;
+  umbral: number;
+  ancho?: string;
+}) {
+  const crudo = umbral > 0 ? (actual / umbral) * 100 : 0;
+  const porcentaje = Math.min(100, crudo);
+  const color = crudo >= 100 ? 'bg-red-700' : crudo >= 90 ? 'bg-amber-600' : 'bg-emerald-700';
 
   return (
-    <div className="h-1.5 w-28 bg-line" role="presentation">
-      <div className={`h-full ${color}`} style={{ width: `${porcentaje}%` }} />
+    <div className={`relative h-2 ${ancho} bg-line`} role="presentation">
+      {/* alert zone: the last 10 % before the threshold */}
+      <div className="absolute inset-y-0 right-0 w-[10%] bg-amber-700/15" />
+      <div className={`relative h-full ${color}`} style={{ width: `${porcentaje}%` }} />
+      <div className="absolute -inset-y-0.5 right-0 w-px bg-ink" />
     </div>
   );
 }
@@ -82,6 +154,12 @@ export const tabla = {
   num: 'border-b border-line/70 px-4 py-3 text-right font-mono align-middle',
 };
 
-export function Vacio({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-10 text-center text-sm text-muted">{children}</p>;
+/** Empty state: says why it is empty and what to do about it, never a blank panel. */
+export function Vacio({ children, accion }: { children: ReactNode; accion?: ReactNode }) {
+  return (
+    <div className="px-4 py-10 text-center">
+      <p className="text-sm text-muted">{children}</p>
+      {accion && <div className="mt-3">{accion}</div>}
+    </div>
+  );
 }

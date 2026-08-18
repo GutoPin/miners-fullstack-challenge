@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { postJson } from '@/src/components/api';
 import { formatHoras } from '@/src/components/format';
+import { Aviso, boton, campo } from '@/src/components/ui';
 
 interface Resultado {
   previousThreshold: number;
@@ -69,7 +70,7 @@ export function RegistrarMantenimiento({
           e.preventDefault();
           void registrar();
         }}
-        className="flex flex-wrap items-end gap-4"
+        className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
       >
         <label className="block">
           <span className="rotulo">Horómetro al servicio</span>
@@ -80,7 +81,7 @@ export function RegistrarMantenimiento({
             required
             value={hoursAtService}
             onChange={(e) => setHoras(Number(e.target.value))}
-            className="mt-1.5 block w-36 border border-line bg-canvas px-3 py-2 text-right font-mono text-sm"
+            className={`mt-1.5 w-40 ${campo.numero}`}
           />
         </label>
 
@@ -88,53 +89,67 @@ export function RegistrarMantenimiento({
           <span className="rotulo">Responsable</span>
           <input
             required
+            autoComplete="off"
             value={responsible}
             onChange={(e) => setResponsable(e.target.value)}
-            placeholder="Taller central · Téc. ..."
-            className="mt-1.5 block w-64 border border-line bg-canvas px-3 py-2 text-sm"
+            placeholder="Taller central · Téc. Ramírez"
+            className={`mt-1.5 ${campo.input}`}
           />
         </label>
 
         <label className="block">
           <span className="rotulo">Observaciones</span>
           <input
+            autoComplete="off"
             value={notes}
             onChange={(e) => setNotas(e.target.value)}
-            placeholder="Opcional"
-            className="mt-1.5 block w-64 border border-line bg-canvas px-3 py-2 text-sm"
+            placeholder="Opcional: repuestos, hallazgos"
+            className={`mt-1.5 ${campo.input}`}
           />
         </label>
 
         <button
           type="submit"
           disabled={enviando || !responsible.trim()}
-          className="bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent disabled:opacity-40"
+          className={boton.primario}
         >
           {enviando ? 'Registrando…' : 'Registrar y liberar equipo'}
         </button>
       </form>
 
-      <p className="mt-3 text-xs text-muted">
-        Umbral que se debía cumplir: {formatHoras(threshold)} h · atraso {formatHoras(atraso)} h ·
-        próximo umbral previsto <strong>{formatHoras(previsto)} h</strong> (anclado al umbral
-        anterior, no a las {formatHoras(hoursAtService)} h reales).
-      </p>
+      <Aviso tono="neutro" titulo="Al registrarlo, esto pasa:" className="mt-4">
+        <ul className="list-disc space-y-0.5 pl-4">
+          <li>
+            {code} vuelve a <strong>DISPONIBLE</strong> y sus asignaciones en riesgo por este
+            bloqueo se reactivan.
+          </li>
+          <li>
+            El umbral pasa de {formatHoras(threshold)} h a{' '}
+            <strong>{formatHoras(previsto)} h</strong>: se ancla al umbral anterior más el
+            intervalo de {interval} h, no a las {formatHoras(hoursAtService)} h reales.
+          </li>
+          <li>
+            Se registra un atraso de {formatHoras(atraso)} h, que es lo que el equipo operó
+            por encima del umbral que le tocaba.
+          </li>
+        </ul>
+      </Aviso>
 
       {error && (
-        <p role="alert" className="mt-3 border border-red-700/40 bg-red-50 px-3 py-2 text-sm text-red-900">
-          {error}
-        </p>
+        <div role="alert" className="mt-3">
+          <Aviso tono="bloqueo">{error}</Aviso>
+        </div>
       )}
 
       {resultado && (
-        <div className="mt-3 border border-emerald-700/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          {code} liberado. Umbral anterior {formatHoras(resultado.previousThreshold)} h → nuevo{' '}
+        <Aviso tono="ok" titulo={`${code} liberado.`} className="mt-3">
+          Umbral anterior {formatHoras(resultado.previousThreshold)} h → nuevo{' '}
           <strong>{formatHoras(resultado.nextThreshold)} h</strong>, atraso registrado{' '}
           {formatHoras(resultado.overdue)} h
           {resultado.reAnchored && ' (re-anclado: el atraso se había comido un ciclo entero)'}.
           {resultado.recoveredAssignments > 0 &&
             ` ${resultado.recoveredAssignments} asignación(es) volvieron a estar activas.`}
-        </div>
+        </Aviso>
       )}
     </div>
   );

@@ -10,17 +10,25 @@ import {
   diasHasta,
   formatHoras,
 } from '@/src/components/format';
-import { Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
+import { Aviso, Badge, Encabezado, Panel, Vacio, boton, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toIsoDate } from '@/src/services/dates';
 import { AsignarForm } from './assign-form';
 import { CancelarAsignacion } from './cancel-assignment';
 import { CerrarTurnoForm } from './close-shift-form';
+import { Proceso } from './proceso';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TurnoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TurnoPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ nuevo?: string }>;
+}) {
   const { id } = await params;
+  const { nuevo } = await searchParams;
   const session = await auth();
   const rol = session?.user.role;
   const puedeOperar = rol === 'PLANNER' || rol === 'SUPERVISOR';
@@ -48,6 +56,7 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
   const vigentes = turno.assignments.filter((a) => a.status !== 'CANCELLED');
   const enRiesgo = vigentes.filter((a) => a.status === 'AT_RISK');
   const planificado = turno.status === 'PLANNED';
+  const horasPlan = vigentes.reduce((t, a) => t + Number(a.plannedHours), 0);
 
   return (
     <>
@@ -64,9 +73,56 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
         }
       />
 
-      <Panel titulo={`Asignaciones (${vigentes.length})`}>
+      <dl className="mb-6 grid grid-cols-2 border border-line bg-surface sm:grid-cols-4">
+        {[
+          { t: 'Asignaciones vigentes', v: String(vigentes.length) },
+          { t: 'En riesgo', v: String(enRiesgo.length) },
+          { t: 'Horas planificadas', v: `${formatHoras(horasPlan)} h` },
+          { t: 'Canceladas', v: String(turno.assignments.length - vigentes.length) },
+        ].map((c) => (
+          <div key={c.t} className="border-r border-b border-line px-4 py-3 last:border-r-0">
+            <dd className="font-mono text-xl font-medium">{c.v}</dd>
+            <dt className="mt-0.5 text-xs text-muted">{c.t}</dt>
+          </div>
+        ))}
+      </dl>
+
+      {nuevo && (
+        <Aviso tono="ok" titulo="Turno creado." className="mb-6">
+          Ya puede asignar equipos y operadores. Cada asignación hereda las{' '}
+          {formatHoras(turno.plannedHours)} h de duración del turno.
+        </Aviso>
+      )}
+
+      {planificado && puedeOperar && (
+        <Proceso asignadas={vigentes.length} enRiesgo={enRiesgo.length} />
+      )}
+
+      {!puedeOperar && (
+        <Aviso tono="neutro" titulo="Su rol es de solo consulta." className="mb-6">
+          Puede revisar las asignaciones y el estado del turno. Crear asignaciones, cancelarlas
+          o cerrar el turno requiere el rol de planificador o supervisor.
+        </Aviso>
+      )}
+
+      <Panel
+        id="asignaciones"
+        titulo={`Asignaciones (${vigentes.length} vigentes)`}
+        descripcion="Qué equipo opera quién en este turno"
+        className="scroll-mt-6"
+      >
         {turno.assignments.length === 0 ? (
-          <Vacio>Este turno todavía no tiene asignaciones.</Vacio>
+          <Vacio
+            accion={
+              planificado && puedeOperar ? (
+                <a href="#asignar" className={boton.secundario}>
+                  Crear la primera asignación
+                </a>
+              ) : undefined
+            }
+          >
+            Este turno todavía no tiene asignaciones.
+          </Vacio>
         ) : (
           <div className={tabla.wrapper}>
             <table className={tabla.table}>
@@ -78,12 +134,15 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
                   <th scope="col" className={`${tabla.th} text-right`}>Planificadas</th>
                   <th scope="col" className={`${tabla.th} text-right`}>Reales</th>
                   <th scope="col" className={tabla.th}>Observaciones</th>
-                  {planificado && puedeOperar && <th scope="col" className={tabla.th}></th>}
+                  {planificado && puedeOperar && <th scope="col" className={tabla.th}>Acción</th>}
                 </tr>
               </thead>
               <tbody>
                 {turno.assignments.map((a) => (
-                  <tr key={a.id} className={a.override ? 'bg-red-50/40' : undefined}>
+                  <tr
+                    key={a.id}
+                    className={a.status === 'AT_RISK' ? 'bg-amber-50/60' : undefined}
+                  >
                     <td className={`${tabla.td} font-mono`}>
                       <Link href={`/equipos/${a.equipmentId}`} className="hover:text-accent">
                         {a.equipment.code}
@@ -99,23 +158,28 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
                     <td className={tabla.num}>
                       {a.actualHours === null ? '—' : formatHoras(a.actualHours)}
                     </td>
-                    <td className={`${tabla.td} text-xs text-muted`}>
+                    <td className={`${tabla.td} max-w-sm text-xs text-muted`}>
                       {a.override && (
                         <span className="block font-medium text-red-800">
                           Forzada por {a.override.authorizedBy.name}: {a.override.reason}
                         </span>
                       )}
-                      {a.riskReason && !a.override && <span className="block">{a.riskReason}</span>}
+                      {/* an override already prints its reason above; printing both repeats it */}
+                      {a.riskReason && !a.override && (
+                        <span className="block text-amber-900">{a.riskReason}</span>
+                      )}
                       {a.varianceNote && <span className="block">Desvío: {a.varianceNote}</span>}
                       {!a.override && !a.riskReason && !a.varianceNote && '—'}
                     </td>
                     {planificado && puedeOperar && (
-                      <td className={`${tabla.td} text-right`}>
-                        {a.status !== 'CANCELLED' && (
+                      <td className={tabla.td}>
+                        {a.status !== 'CANCELLED' ? (
                           <CancelarAsignacion
                             assignmentId={a.id}
                             etiqueta={`${a.operator.fullName} en ${a.equipment.code}`}
                           />
+                        ) : (
+                          <span className="text-xs text-muted">—</span>
                         )}
                       </td>
                     )}
@@ -125,10 +189,23 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
             </table>
           </div>
         )}
+
+        {enRiesgo.length > 0 && (
+          <div className="border-t border-line px-4 py-3 text-xs text-muted">
+            Las filas ámbar son asignaciones que nacieron bien y se rompieron después: el
+            equipo se bloqueó al cruzar su umbral, o un supervisor firmó una excepción.
+            Cancélelas o libere el equipo con un mantenimiento para poder cerrar el turno.
+          </div>
+        )}
       </Panel>
 
       {planificado && puedeOperar && (
-        <Panel titulo="Nueva asignación" className="mt-6">
+        <Panel
+          id="asignar"
+          titulo="Nueva asignación"
+          descripcion="Se valida contra las 12 reglas antes de guardar"
+          className="mt-6 scroll-mt-6"
+        >
           <AsignarForm
             shiftId={turno.id}
             plannedHours={Number(turno.plannedHours)}
@@ -138,6 +215,7 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
               code: e.code,
               typeName: e.type.name,
               estado: ESTADO_EQUIPO[e.status].label,
+              disponible: e.status === 'AVAILABLE',
               currentHours: Number(e.currentHours),
               nextMaintenanceHours: Number(e.nextMaintenanceHours),
             }))}
@@ -160,16 +238,37 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
       )}
 
       {planificado && puedeOperar && (
-        <Panel titulo="Cerrar turno" className="mt-6">
+        <Panel
+          id="cerrar"
+          titulo="Cerrar turno"
+          descripcion="Registra las horas reales y las suma al horómetro de cada equipo"
+          className="mt-6 scroll-mt-6"
+        >
           {enRiesgo.length > 0 ? (
-            <p className="px-4 py-4 text-sm text-amber-900">
-              Hay {enRiesgo.length}{' '}
-              {enRiesgo.length === 1 ? 'asignación en riesgo' : 'asignaciones en riesgo'} sin
-              resolver. Reasigne el equipo o cancele la asignación antes de cerrar: el sistema
-              no cierra en silencio algo que alguien tiene que decidir.
-            </p>
+            <Aviso
+              tono="aviso"
+              titulo={`Falta resolver ${enRiesgo.length} ${enRiesgo.length === 1 ? 'asignación en riesgo' : 'asignaciones en riesgo'}.`}
+              className="m-4"
+            >
+              <p>
+                {enRiesgo.map((a) => a.equipment.code).join(', ')}. Cancele la asignación o
+                registre el mantenimiento del equipo: el turno no se cierra en silencio con
+                algo que alguien tiene que decidir.
+              </p>
+              <a href="#asignaciones" className="mt-2 inline-block text-sm underline">
+                Ir a las asignaciones
+              </a>
+            </Aviso>
           ) : vigentes.length === 0 ? (
-            <Vacio>Sin asignaciones que cerrar.</Vacio>
+            <Vacio
+              accion={
+                <a href="#asignar" className={boton.secundario}>
+                  Crear una asignación
+                </a>
+              }
+            >
+              No hay nada que cerrar: este turno no tiene asignaciones vigentes.
+            </Vacio>
           ) : (
             <CerrarTurnoForm
               shiftId={turno.id}
@@ -187,10 +286,17 @@ export default async function TurnoPage({ params }: { params: Promise<{ id: stri
       )}
 
       {!planificado && (
-        <p className="mt-6 text-sm text-muted">
-          El turno está {ESTADO_TURNO[turno.status].label.toLowerCase()}: las horas ya se
-          sumaron al horómetro y no se puede volver a cerrar ni modificar sus asignaciones.
-        </p>
+        <Aviso
+          tono="neutro"
+          titulo={`Turno ${ESTADO_TURNO[turno.status].label.toLowerCase()}.`}
+          className="mt-6"
+        >
+          Las horas reales ya se sumaron al horómetro de cada equipo y quedaron asentadas en la{' '}
+          <Link href="/auditoria" className="underline hover:text-accent">
+            bitácora
+          </Link>
+          . Un turno cerrado no se vuelve a cerrar ni admite cambios en sus asignaciones.
+        </Aviso>
       )}
     </>
   );

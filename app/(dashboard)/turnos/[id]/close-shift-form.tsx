@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { postJson, type ApiError } from '@/src/components/api';
 import { formatHoras } from '@/src/components/format';
 import { PanelViolaciones } from '@/src/components/violations-panel';
-import { tabla } from '@/src/components/ui';
+import { Aviso, boton, tabla } from '@/src/components/ui';
 
 export interface FilaCierre {
   id: string;
@@ -30,8 +30,10 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
   const [error, setError] = useState<ApiError | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  const reales = (f: FilaCierre) => horas[f.id] ?? f.plannedHours;
+
   function desvioGrande(fila: FilaCierre) {
-    const variacion = (horas[fila.id] ?? fila.plannedHours) - fila.plannedHours;
+    const variacion = reales(fila) - fila.plannedHours;
     return (
       Math.abs(variacion) > DESVIO_HORAS ||
       (fila.plannedHours > 0 && Math.abs(variacion) / fila.plannedHours > DESVIO_RELATIVO)
@@ -39,6 +41,8 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
   }
 
   const faltaNota = filas.some((f) => desvioGrande(f) && !(notas[f.id] ?? '').trim());
+  const totalHoras = filas.reduce((t, f) => t + reales(f), 0);
+  const seBloquean = filas.filter((f) => f.currentHours + reales(f) >= f.nextMaintenanceHours);
 
   async function cerrar() {
     setEnviando(true);
@@ -68,12 +72,12 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
           </thead>
           <tbody>
             {filas.map((f) => {
-              const reales = horas[f.id] ?? f.plannedHours;
-              const despues = f.currentHours + reales;
+              const h = reales(f);
+              const despues = f.currentHours + h;
               const bloquea = despues >= f.nextMaintenanceHours;
 
               return (
-                <tr key={f.id}>
+                <tr key={f.id} className={bloquea ? 'bg-red-50/50' : undefined}>
                   <td className={`${tabla.td} font-mono`}>{f.equipmentCode}</td>
                   <td className={tabla.td}>{f.operatorName}</td>
                   <td className={`${tabla.num} text-muted`}>{formatHoras(f.plannedHours)}</td>
@@ -85,11 +89,11 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                       min={0.5}
                       max={24}
                       step={0.5}
-                      value={reales}
+                      value={h}
                       onChange={(e) =>
                         setHoras({ ...horas, [f.id]: Number(e.target.value) })
                       }
-                      className="w-24 border border-line bg-canvas px-2 py-1.5 text-right font-mono text-sm"
+                      className="w-24 border border-line bg-canvas px-2 py-2 text-right font-mono text-sm"
                     />
                   </td>
                   <td className={`${tabla.td} text-xs`}>
@@ -100,24 +104,21 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                     )}
                   </td>
                   <td className={tabla.td}>
-                    {desvioGrande(f) ? (
-                      <input
-                        required
-                        aria-label={`Nota del desvío de ${f.equipmentCode}`}
-                        value={notas[f.id] ?? ''}
-                        onChange={(e) => setNotas({ ...notas, [f.id]: e.target.value })}
-                        placeholder="Obligatoria: explique el desvío"
-                        className="w-64 border border-amber-700/50 bg-amber-50 px-2 py-1.5 text-sm"
-                      />
-                    ) : (
-                      <input
-                        aria-label={`Nota del desvío de ${f.equipmentCode}`}
-                        value={notas[f.id] ?? ''}
-                        onChange={(e) => setNotas({ ...notas, [f.id]: e.target.value })}
-                        placeholder="Opcional"
-                        className="w-64 border border-line bg-canvas px-2 py-1.5 text-sm"
-                      />
-                    )}
+                    <input
+                      required={desvioGrande(f)}
+                      autoComplete="off"
+                      aria-label={`Nota del desvío de ${f.equipmentCode}`}
+                      value={notas[f.id] ?? ''}
+                      onChange={(e) => setNotas({ ...notas, [f.id]: e.target.value })}
+                      placeholder={
+                        desvioGrande(f) ? 'Obligatoria: explique el desvío' : 'Opcional'
+                      }
+                      className={`w-64 px-2 py-2 text-sm ${
+                        desvioGrande(f)
+                          ? 'border border-amber-700/50 bg-amber-50'
+                          : 'border border-line bg-canvas'
+                      }`}
+                    />
                   </td>
                 </tr>
               );
@@ -127,6 +128,22 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
       </div>
 
       <div className="space-y-3 border-t border-line px-4 py-4">
+        <Aviso tono={seBloquean.length > 0 ? 'aviso' : 'neutro'} titulo="Al cerrar, esto pasa:">
+          <ul className="list-disc space-y-0.5 pl-4">
+            <li>
+              Se suman <strong>{formatHoras(totalHoras)} h</strong> repartidas entre{' '}
+              {filas.length} {filas.length === 1 ? 'equipo' : 'equipos'}, cada una con su
+              asiento en la bitácora.
+            </li>
+            <li>
+              {seBloquean.length === 0
+                ? 'Ningún equipo alcanza su umbral con estas horas.'
+                : `Quedan BLOQUEADOS ${seBloquean.map((f) => f.equipmentCode).join(', ')} por alcanzar su umbral, y sus asignaciones futuras pasan a EN RIESGO.`}
+            </li>
+            <li>El turno queda cerrado: no se vuelve a cerrar ni admite cambios.</li>
+          </ul>
+        </Aviso>
+
         {error && (
           <div role="alert">
             <PanelViolaciones mensaje={error.message} violations={error.violations} />
@@ -134,17 +151,18 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
         )}
 
         {faltaNota && (
-          <p className="text-sm text-amber-900">
-            Hay desvíos mayores a {DESVIO_HORAS} h o al {DESVIO_RELATIVO * 100} % sin
-            justificar. Sin la nota el dato se ensucia y nadie puede auditarlo después.
-          </p>
+          <Aviso tono="aviso" titulo="Faltan notas de desvío.">
+            Hay diferencias mayores a {DESVIO_HORAS} h o al {DESVIO_RELATIVO * 100} % entre las
+            horas planificadas y las reales. Sin la nota el dato pierde valor para reportería y
+            nadie puede auditarlo después.
+          </Aviso>
         )}
 
         <button
           type="button"
           disabled={enviando || faltaNota}
           onClick={() => void cerrar()}
-          className="bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent disabled:opacity-40"
+          className={boton.primario}
         >
           {enviando ? 'Cerrando…' : 'Cerrar turno y sumar horas al horómetro'}
         </button>

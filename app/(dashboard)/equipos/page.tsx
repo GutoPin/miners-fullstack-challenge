@@ -1,17 +1,32 @@
 import Link from 'next/link';
 
 import { ESTADO_EQUIPO, formatHoras } from '@/src/components/format';
-import { Badge, BarraHorometro, Encabezado, Panel, tabla } from '@/src/components/ui';
+import { Aviso, Badge, BarraHorometro, Encabezado, Panel, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
+import type { EquipmentStatus } from '@/src/domain/types';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Equipos · MineOps' };
+
+const ESTADOS: EquipmentStatus[] = [
+  'AVAILABLE',
+  'BLOCKED',
+  'IN_MAINTENANCE',
+  'OUT_OF_SERVICE',
+];
 
 export default async function EquiposPage() {
   const equipos = await prisma.equipment.findMany({
     include: { type: true, _count: { select: { maintenances: true } } },
     orderBy: { code: 'asc' },
   });
+
+  const porEstado = equipos.reduce<Record<string, number>>((acc, e) => {
+    acc[e.status] = (acc[e.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const bloqueados = equipos.filter((e) => e.status === 'BLOCKED');
 
   return (
     <>
@@ -20,7 +35,34 @@ export default async function EquiposPage() {
         descripcion="Horómetro, umbral de mantenimiento y estado. Un equipo se bloquea solo al alcanzar su umbral; se libera registrando el mantenimiento."
       />
 
-      <Panel>
+      <dl className="mb-6 grid grid-cols-2 border border-line bg-surface sm:grid-cols-4">
+        {ESTADOS.map((s) => (
+          <div key={s} className="border-r border-b border-line px-4 py-4 last:border-r-0">
+            <dd className="font-mono text-2xl font-medium">{porEstado[s] ?? 0}</dd>
+            <dt className="mt-1 text-xs text-muted">{ESTADO_EQUIPO[s].label}</dt>
+          </div>
+        ))}
+      </dl>
+
+      {bloqueados.length > 0 && (
+        <Aviso
+          tono="bloqueo"
+          titulo={`${bloqueados.length} ${bloqueados.length === 1 ? 'equipo bloqueado' : 'equipos bloqueados'} por horómetro.`}
+          className="mb-6"
+        >
+          {bloqueados.map((e, i) => (
+            <span key={e.id}>
+              {i > 0 && ', '}
+              <Link href={`/equipos/${e.id}`} className="font-mono underline">
+                {e.code}
+              </Link>
+            </span>
+          ))}
+          . No se pueden asignar a ningún turno hasta que se registre su mantenimiento.
+        </Aviso>
+      )}
+
+      <Panel titulo="Flota" descripcion="La barra compara el horómetro con el umbral de cada unidad">
         <div className={tabla.wrapper}>
           <table className={tabla.table}>
             <thead>
@@ -69,12 +111,14 @@ export default async function EquiposPage() {
             </tbody>
           </table>
         </div>
-      </Panel>
 
-      <p className="mt-3 text-xs text-muted">
-        &laquo;Faltan&raquo; es la diferencia entre el umbral y el horómetro. En rojo y con
-        signo <span className="font-mono">+</span>, las horas operadas por encima del umbral.
-      </p>
+        <p className="border-t border-line px-4 py-3 text-xs text-muted">
+          &laquo;Faltan&raquo; es la diferencia entre el umbral y el horómetro. En rojo y con
+          signo <span className="font-mono">+</span>, las horas operadas por encima del umbral.
+          La franja ámbar de la barra es el último 10 % del ciclo y la marca vertical es el
+          umbral que bloquea la unidad.
+        </p>
+      </Panel>
     </>
   );
 }

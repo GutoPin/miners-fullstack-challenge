@@ -3,23 +3,31 @@ import Link from 'next/link';
 import { auth, signOut } from '@/src/auth';
 import { NavLink } from '@/src/components/nav-link';
 
+// ordered by how the day runs: what needs a decision first, catalogues and traceability after
 const SECCIONES = [
   { href: '/', label: 'Tablero' },
-  { href: '/equipos', label: 'Equipos' },
-  { href: '/operadores', label: 'Operadores' },
   { href: '/turnos', label: 'Turnos' },
   { href: '/proyeccion', label: 'Proyección' },
+  { href: '/equipos', label: 'Equipos' },
+  { href: '/operadores', label: 'Operadores' },
   { href: '/auditoria', label: 'Auditoría' },
 ];
 
-const ROL: Record<string, string> = {
-  SUPERVISOR: 'Supervisor',
-  PLANNER: 'Planificador',
-  VIEWER: 'Consulta',
+const ROL: Record<string, { nombre: string; puede: string }> = {
+  SUPERVISOR: {
+    nombre: 'Supervisor',
+    puede: 'Asigna, cierra turnos y firma excepciones.',
+  },
+  PLANNER: {
+    nombre: 'Planificador',
+    puede: 'Asigna y cierra turnos. No firma excepciones.',
+  },
+  VIEWER: { nombre: 'Consulta', puede: 'Solo lectura.' },
 };
 
 export default async function DashboardLayout({ children }: LayoutProps<'/'>) {
   const session = await auth();
+  const rol = session ? ROL[session.user.role] : undefined;
 
   return (
     <div className="lg:grid lg:min-h-svh lg:grid-cols-[15rem_1fr]">
@@ -53,7 +61,8 @@ export default async function DashboardLayout({ children }: LayoutProps<'/'>) {
         {session?.user && (
           <div className="border-t border-line px-5 py-4 lg:absolute lg:bottom-0 lg:w-60">
             <p className="text-sm font-medium">{session.user.name}</p>
-            <p className="rotulo mt-0.5">{ROL[session.user.role] ?? session.user.role}</p>
+            <p className="rotulo mt-0.5">{rol?.nombre ?? session.user.role}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">{rol?.puede}</p>
             <form
               action={async () => {
                 'use server';

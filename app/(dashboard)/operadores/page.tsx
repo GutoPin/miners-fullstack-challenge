@@ -1,5 +1,5 @@
 import { diasHasta } from '@/src/components/format';
-import { Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
+import { Aviso, Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toIsoDate } from '@/src/services/dates';
 
@@ -17,6 +17,13 @@ export default async function OperadoresPage() {
     orderBy: { code: 'asc' },
   });
 
+  const certificaciones = operadores.flatMap((o) =>
+    o.certifications.map((c) => ({ operador: o.fullName, dias: diasHasta(c.expiresAt) })),
+  );
+  const vencidas = certificaciones.filter((c) => c.dias < 0);
+  const porVencer = certificaciones.filter((c) => c.dias >= 0 && c.dias <= AVISO_DIAS);
+  const sinCertificar = operadores.filter((o) => o.certifications.length === 0);
+
   return (
     <>
       <Encabezado
@@ -24,7 +31,41 @@ export default async function OperadoresPage() {
         descripcion="Certificaciones por tipo de equipo y su vencimiento. La vigencia se evalúa contra la fecha del turno, no contra hoy: por eso una certificación vigente hoy puede rechazar un turno de la próxima semana."
       />
 
-      <Panel>
+      <dl className="mb-6 grid grid-cols-2 border border-line bg-surface sm:grid-cols-4">
+        {[
+          { t: 'Operadores', v: operadores.length },
+          { t: 'Certificaciones vigentes', v: certificaciones.length - vencidas.length },
+          { t: `Vencen en ${AVISO_DIAS} días`, v: porVencer.length },
+          { t: 'Vencidas', v: vencidas.length },
+        ].map((c) => (
+          <div key={c.t} className="border-r border-b border-line px-4 py-4 last:border-r-0">
+            <dd className="font-mono text-2xl font-medium">{c.v}</dd>
+            <dt className="mt-1 text-xs text-muted">{c.t}</dt>
+          </div>
+        ))}
+      </dl>
+
+      {(vencidas.length > 0 || sinCertificar.length > 0) && (
+        <Aviso tono="aviso" titulo="Hay operadores que no pueden recibir ciertas asignaciones." className="mb-6">
+          {vencidas.length > 0 && (
+            <>
+              {vencidas.length}{' '}
+              {vencidas.length === 1 ? 'certificación vencida' : 'certificaciones vencidas'}: el
+              sistema rechaza la asignación al tipo de equipo correspondiente, y un supervisor
+              puede autorizarla dejando constancia.{' '}
+            </>
+          )}
+          {sinCertificar.length > 0 && (
+            <>
+              {sinCertificar.map((o) => o.fullName).join(', ')} no{' '}
+              {sinCertificar.length === 1 ? 'tiene' : 'tienen'} ninguna certificación
+              registrada.
+            </>
+          )}
+        </Aviso>
+      )}
+
+      <Panel titulo="Plantilla" descripcion="Los días indicados se cuentan desde hoy">
         <div className={tabla.wrapper}>
           <table className={tabla.table}>
             <thead>

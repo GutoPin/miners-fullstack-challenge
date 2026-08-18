@@ -3,8 +3,9 @@ import { notFound } from 'next/navigation';
 
 import { auth } from '@/src/auth';
 
+import { HistorialHorometro } from '@/src/components/charts';
 import { ESTADO_EQUIPO, formatHoras } from '@/src/components/format';
-import { Badge, BarraHorometro, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
+import { Aviso, Badge, BarraHorometro, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toOperationalDate } from '@/src/services/dates';
 import { RegistrarMantenimiento } from './register-maintenance-form';
@@ -38,10 +39,18 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
   const umbral = Number(equipo.nextMaintenanceHours);
   const intervalo =
     equipo.maintenanceIntervalOverride ?? equipo.type.maintenanceIntervalHours;
+  const faltan = umbral - actual;
 
   // the balance must equal the ledger sum; a mismatch is shown, not hidden
   const sumaLedger = equipo.hourmeterEntries.reduce((t, h) => t + Number(h.hoursDelta), 0);
   const cuadra = equipo.hourmeterEntries.length < 50 && Math.abs(sumaLedger - actual) < 0.005;
+
+  // chronological for the chart; the ledger below stays newest first
+  const serie = [...equipo.hourmeterEntries].reverse().map((h) => ({
+    fecha: toOperationalDate(h.createdAt),
+    horas: Number(h.hoursAfter),
+    mantenimiento: h.source === 'MAINTENANCE',
+  }));
 
   return (
     <>
@@ -51,33 +60,55 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
           equipo.maintenanceIntervalOverride ? ' (propio de esta unidad)' : ' (heredado del tipo)'
         }`}
         acciones={
-          <Link href="/equipos" className="text-sm text-muted underline hover:text-accent">
-            Volver a equipos
-          </Link>
+          <div className="flex items-center gap-3">
+            <Badge tono={ESTADO_EQUIPO[equipo.status].tono}>
+              {ESTADO_EQUIPO[equipo.status].label}
+            </Badge>
+            <Link href="/equipos" className="text-sm text-muted underline hover:text-accent">
+              Volver a equipos
+            </Link>
+          </div>
         }
       />
+
+      {equipo.status === 'BLOCKED' && (
+        <Aviso
+          tono="bloqueo"
+          titulo={`${equipo.code} está bloqueado por horómetro.`}
+          className="mb-6"
+        >
+          Alcanzó las {formatHoras(umbral)} h de su umbral y no se puede asignar a ningún
+          turno. {puedeOperar
+            ? 'Registre el mantenimiento en el formulario de abajo para liberarlo: al hacerlo vuelven a estar activas las asignaciones que quedaron en riesgo por este bloqueo.'
+            : 'Un planificador o supervisor debe registrar el mantenimiento para liberarlo.'}
+        </Aviso>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Panel titulo="Estado" className="lg:col-span-1">
           <div className="space-y-4 px-4 py-4">
-            <Badge tono={ESTADO_EQUIPO[equipo.status].tono}>
-              {ESTADO_EQUIPO[equipo.status].label}
-            </Badge>
-
             <div>
               <p className="font-mono text-3xl font-medium">{formatHoras(actual)} h</p>
               <p className="mt-1 text-xs text-muted">
                 Umbral de bloqueo en {formatHoras(umbral)} h
               </p>
               <div className="mt-2">
-                <BarraHorometro actual={actual} umbral={umbral} />
+                <BarraHorometro actual={actual} umbral={umbral} ancho="w-full" />
               </div>
             </div>
 
-            <dl className="space-y-1 text-sm">
+            <dl className="space-y-1 border-t border-line pt-3 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-muted">Faltan</dt>
-                <dd className="font-mono">{formatHoras(Math.max(0, umbral - actual))} h</dd>
+                <dt className="text-muted">{faltan >= 0 ? 'Faltan' : 'Operó de más'}</dt>
+                <dd className={`font-mono ${faltan < 0 ? 'text-red-800' : ''}`}>
+                  {formatHoras(Math.abs(faltan))} h
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Uso del ciclo</dt>
+                <dd className="font-mono">
+                  {umbral > 0 ? Math.round((actual / umbral) * 100) : 0} %
+                </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-muted">Servicios registrados</dt>
@@ -87,55 +118,74 @@ export default async function EquipoPage({ params }: { params: Promise<{ id: str
           </div>
         </Panel>
 
-        <Panel titulo="Historial de mantenimientos" className="lg:col-span-2">
-          {equipo.maintenances.length === 0 ? (
-            <Vacio>Este equipo todavía no tiene mantenimientos registrados.</Vacio>
+        <Panel
+          titulo="Horómetro en el tiempo"
+          descripcion="Ritmo de acumulación, servicios y distancia al umbral"
+          className="lg:col-span-2"
+        >
+          {serie.length < 2 ? (
+            <Vacio>
+              Hacen falta al menos dos movimientos de horómetro para dibujar la evolución. Este
+              equipo tiene {serie.length}.
+            </Vacio>
           ) : (
-            <div className={tabla.wrapper}>
-              <table className={tabla.table}>
-                <thead>
-                  <tr>
-                    <th scope="col" className={tabla.th}>Fecha</th>
-                    <th scope="col" className={`${tabla.th} text-right`}>Horómetro</th>
-                    <th scope="col" className={`${tabla.th} text-right`}>Umbral</th>
-                    <th scope="col" className={`${tabla.th} text-right`}>Atraso</th>
-                    <th scope="col" className={`${tabla.th} text-right`}>Nuevo umbral</th>
-                    <th scope="col" className={tabla.th}>Responsable</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {equipo.maintenances.map((m) => (
-                    <tr key={m.id}>
-                      <td className={`${tabla.td} font-mono`}>
-                        {formatIsoDate(toOperationalDate(m.performedAt))}
-                      </td>
-                      <td className={tabla.num}>{formatHoras(m.hoursAtService)}</td>
-                      <td className={`${tabla.num} text-muted`}>{formatHoras(m.thresholdHours)}</td>
-                      <td
-                        className={`${tabla.num} ${Number(m.overdueHours) > 0 ? 'text-amber-800' : 'text-muted'}`}
-                      >
-                        {formatHoras(m.overdueHours)}
-                      </td>
-                      <td className={tabla.num}>{formatHoras(m.nextThresholdHours)}</td>
-                      <td className={`${tabla.td} text-muted`}>
-                        {m.responsible}
-                        {m.notes && <span className="block text-xs">{m.notes}</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <HistorialHorometro puntos={serie} umbral={umbral} />
           )}
-          <p className="border-t border-line px-4 py-3 text-xs text-muted">
-            El nuevo umbral se ancla al umbral anterior más el intervalo, no al horómetro
-            real: así el atraso no corre la ventana de mantenimiento hacia adelante.
-          </p>
         </Panel>
       </div>
 
+      <Panel titulo="Historial de mantenimientos" className="mt-6">
+        {equipo.maintenances.length === 0 ? (
+          <Vacio>Este equipo todavía no tiene mantenimientos registrados.</Vacio>
+        ) : (
+          <div className={tabla.wrapper}>
+            <table className={tabla.table}>
+              <thead>
+                <tr>
+                  <th scope="col" className={tabla.th}>Fecha</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Horómetro</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Umbral</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Atraso</th>
+                  <th scope="col" className={`${tabla.th} text-right`}>Nuevo umbral</th>
+                  <th scope="col" className={tabla.th}>Responsable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipo.maintenances.map((m) => (
+                  <tr key={m.id}>
+                    <td className={`${tabla.td} font-mono`}>
+                      {formatIsoDate(toOperationalDate(m.performedAt))}
+                    </td>
+                    <td className={tabla.num}>{formatHoras(m.hoursAtService)}</td>
+                    <td className={`${tabla.num} text-muted`}>{formatHoras(m.thresholdHours)}</td>
+                    <td
+                      className={`${tabla.num} ${Number(m.overdueHours) > 0 ? 'text-amber-800' : 'text-muted'}`}
+                    >
+                      {formatHoras(m.overdueHours)}
+                    </td>
+                    <td className={tabla.num}>{formatHoras(m.nextThresholdHours)}</td>
+                    <td className={`${tabla.td} text-muted`}>
+                      {m.responsible}
+                      {m.notes && <span className="block text-xs">{m.notes}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="border-t border-line px-4 py-3 text-xs text-muted">
+          El nuevo umbral se ancla al umbral anterior más el intervalo, no al horómetro
+          real: así el atraso no corre la ventana de mantenimiento hacia adelante.
+        </p>
+      </Panel>
+
       {puedeOperar && equipo.status !== 'OUT_OF_SERVICE' && (
-        <Panel titulo="Registrar mantenimiento" className="mt-6">
+        <Panel
+          titulo="Registrar mantenimiento"
+          descripcion="Libera el equipo, fija el próximo umbral y deja constancia del responsable"
+          className="mt-6"
+        >
           <RegistrarMantenimiento
             equipmentId={equipo.id}
             code={equipo.code}

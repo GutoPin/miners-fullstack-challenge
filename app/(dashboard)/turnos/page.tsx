@@ -2,8 +2,8 @@ import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { ESTADO_TURNO, JORNADA, formatHoras } from '@/src/components/format';
-import { Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
+import { ESTADO_TURNO, JORNADA, diasHasta, formatHoras } from '@/src/components/format';
+import { Aviso, Badge, Encabezado, Panel, Vacio, boton, campo, tabla } from '@/src/components/ui';
 import { auth, requireRole } from '@/src/auth';
 import { prisma } from '@/src/db/prisma';
 import type { Journey } from '@/src/domain/types';
@@ -18,16 +18,19 @@ async function crearTurno(formData: FormData) {
   'use server';
 
   let error: string | null = null;
+  let creado: string | null = null;
 
   try {
     // the server check is the guarantee; hiding the form is only convenience
     await requireRole('PLANNER', 'SUPERVISOR');
 
-    await createShift({
+    const turno = await createShift({
       date: String(formData.get('date') ?? ''),
       journey: String(formData.get('journey') ?? 'DAY') as Journey,
       plannedHours: Number(formData.get('plannedHours') ?? 12),
     });
+
+    creado = turno.id;
   } catch (e) {
     if (!(e instanceof ServiceError)) throw e;
     error = e.message;
@@ -36,7 +39,16 @@ async function crearTurno(formData: FormData) {
   if (error) redirect(`/turnos?error=${encodeURIComponent(error)}`);
 
   revalidatePath('/turnos');
-  redirect('/turnos');
+  // straight to the new shift: a shift is created in order to assign to it
+  redirect(`/turnos/${creado}?nuevo=1`);
+}
+
+/** 'Hoy' reads faster than a date when deciding which shift to open */
+function relativo(dias: number): string | null {
+  if (dias === 0) return 'Hoy';
+  if (dias === 1) return 'Mañana';
+  if (dias === -1) return 'Ayer';
+  return null;
 }
 
 export default async function TurnosPage({
@@ -60,6 +72,8 @@ export default async function TurnosPage({
     take: 30,
   });
 
+  const abiertos = turnos.filter((t) => t.status === 'PLANNED').length;
+
   return (
     <>
       <Encabezado
@@ -68,7 +82,11 @@ export default async function TurnosPage({
       />
 
       {puedeCrear && (
-        <Panel titulo="Nuevo turno" className="mb-6">
+        <Panel
+          titulo="Nuevo turno"
+          descripcion="Al crearlo se abre directamente para asignar equipos"
+          className="mb-6"
+        >
           <form action={crearTurno} className="flex flex-wrap items-end gap-4 px-4 py-4">
             <label className="block">
               <span className="rotulo">Fecha</span>
@@ -77,16 +95,13 @@ export default async function TurnosPage({
                 name="date"
                 required
                 defaultValue={toOperationalDate(new Date())}
-                className="mt-1.5 block border border-line bg-canvas px-3 py-2 font-mono text-sm"
+                className={`mt-1.5 ${campo.numero}`}
               />
             </label>
 
             <label className="block">
               <span className="rotulo">Jornada</span>
-              <select
-                name="journey"
-                className="mt-1.5 block border border-line bg-canvas px-3 py-2 text-sm"
-              >
+              <select name="journey" className={`mt-1.5 ${campo.input}`}>
                 <option value="DAY">Día (07:00 a 19:00)</option>
                 <option value="NIGHT">Noche (19:00 a 07:00)</option>
               </select>
@@ -101,29 +116,32 @@ export default async function TurnosPage({
                 max={24}
                 step={0.5}
                 defaultValue={12}
-                className="mt-1.5 block w-28 border border-line bg-canvas px-3 py-2 font-mono text-sm"
+                className={`mt-1.5 w-28 ${campo.numero}`}
               />
             </label>
 
-            <button
-              type="submit"
-              className="bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent"
-            >
+            <button type="submit" className={boton.primario}>
               Crear turno
             </button>
           </form>
 
           {error && (
-            <p role="alert" className="border-t border-red-700/40 bg-red-50 px-4 py-3 text-sm text-red-900">
-              {error}
-            </p>
+            <div role="alert" className="border-t border-red-700/40">
+              <Aviso tono="bloqueo">{error}</Aviso>
+            </div>
           )}
         </Panel>
       )}
 
-      <Panel titulo="Programación">
+      <Panel
+        titulo="Programación"
+        descripcion={`${turnos.length} últimos turnos · ${abiertos} sin cerrar`}
+      >
         {turnos.length === 0 ? (
-          <Vacio>No hay turnos registrados.</Vacio>
+          <Vacio>
+            No hay turnos registrados. Cree el primero con el formulario de arriba: fecha,
+            jornada y duración.
+          </Vacio>
         ) : (
           <div className={tabla.wrapper}>
             <table className={tabla.table}>
@@ -134,54 +152,71 @@ export default async function TurnosPage({
                   <th scope="col" className={`${tabla.th} text-right`}>Duración</th>
                   <th scope="col" className={tabla.th}>Estado</th>
                   <th scope="col" className={tabla.th}>Asignaciones</th>
+                  <th scope="col" className={tabla.th}>Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {turnos.map((t) => (
-                  <tr key={t.id}>
-                    <td className={`${tabla.td} font-mono whitespace-nowrap`}>
-                      <Link href={`/turnos/${t.id}`} className="hover:text-accent">
-                        {formatIsoDate(toIsoDate(t.date))}
-                      </Link>
-                    </td>
-                    <td className={tabla.td}>{JORNADA[t.journey]}</td>
-                    <td className={tabla.num}>{formatHoras(t.plannedHours)} h</td>
-                    <td className={tabla.td}>
-                      <Badge tono={ESTADO_TURNO[t.status].tono}>
-                        {ESTADO_TURNO[t.status].label}
-                      </Badge>
-                    </td>
-                    <td className={tabla.td}>
-                      {t.assignments.length === 0 ? (
-                        <span className="text-sm text-muted">Sin asignaciones</span>
-                      ) : (
-                        <ul className="space-y-0.5 text-sm">
-                          {t.assignments.map((a) => (
-                            <li key={a.id}>
-                              <span className="font-mono">{a.equipment.code}</span>
-                              <span className="text-muted"> · {a.operator.fullName}</span>
-                              {a.status === 'AT_RISK' && (
-                                <span className="ml-2 text-xs text-amber-800">
-                                  en riesgo: {a.riskReason}
-                                </span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {turnos.map((t) => {
+                  const cuando = relativo(diasHasta(t.date));
+                  const vigentes = t.assignments.filter((a) => a.status !== 'CANCELLED');
+                  const enRiesgo = vigentes.filter((a) => a.status === 'AT_RISK');
+
+                  return (
+                    <tr key={t.id}>
+                      <td className={`${tabla.td} whitespace-nowrap`}>
+                        <Link
+                          href={`/turnos/${t.id}`}
+                          className="font-mono hover:text-accent"
+                        >
+                          {formatIsoDate(toIsoDate(t.date))}
+                        </Link>
+                        {cuando && (
+                          <span className="ml-2 text-xs font-medium text-accent">{cuando}</span>
+                        )}
+                      </td>
+                      <td className={tabla.td}>{JORNADA[t.journey]}</td>
+                      <td className={tabla.num}>{formatHoras(t.plannedHours)} h</td>
+                      <td className={tabla.td}>
+                        <Badge tono={ESTADO_TURNO[t.status].tono}>
+                          {ESTADO_TURNO[t.status].label}
+                        </Badge>
+                      </td>
+                      <td className={`${tabla.td} max-w-md`}>
+                        {vigentes.length === 0 ? (
+                          <span className="text-sm text-muted">Sin asignaciones</span>
+                        ) : (
+                          <>
+                            <span className="text-sm">
+                              {vigentes.length}{' '}
+                              {vigentes.length === 1 ? 'asignación' : 'asignaciones'}
+                            </span>
+                            {enRiesgo.length > 0 && (
+                              <span className="ml-2 text-xs text-amber-800">
+                                · {enRiesgo.length} en riesgo
+                              </span>
+                            )}
+                            <span className="mt-0.5 block truncate text-xs text-muted">
+                              {vigentes.map((a) => a.equipment.code).join(', ')}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                      <td className={tabla.td}>
+                        <Link
+                          href={`/turnos/${t.id}`}
+                          className="border border-line px-3 py-1.5 text-xs whitespace-nowrap hover:border-accent hover:text-accent"
+                        >
+                          {t.status === 'PLANNED' ? 'Asignar o cerrar' : 'Ver detalle'}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </Panel>
-
-      <p className="mt-3 text-xs text-muted">
-        Abra un turno para asignar equipos, resolver asignaciones en riesgo y cerrarlo con las
-        horas reales.
-      </p>
     </>
   );
 }

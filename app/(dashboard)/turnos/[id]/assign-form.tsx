@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { postJson, type ApiError } from '@/src/components/api';
 import { PanelViolaciones } from '@/src/components/violations-panel';
 import { formatHoras } from '@/src/components/format';
+import { Aviso, BarraHorometro, boton, campo } from '@/src/components/ui';
 import type { Violation } from '@/src/domain/rules/violation';
 
 export interface OpcionEquipo {
@@ -13,6 +14,7 @@ export interface OpcionEquipo {
   code: string;
   typeName: string;
   estado: string;
+  disponible: boolean;
   currentHours: number;
   nextMaintenanceHours: number;
 }
@@ -45,13 +47,20 @@ export function AsignarForm({
   const [operatorId, setOperatorId] = useState('');
   const [horas, setHoras] = useState(plannedHours);
   const [error, setError] = useState<ApiError | null>(null);
+  const [exito, setExito] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   // the preview is stored with the pair that produced it, so a stale result hides itself
-  const [previa, setPrevia] = useState<{ clave: string; violations: Violation[] } | null>(null);
+  const [previa, setPrevia] = useState<{
+    clave: string;
+    violations: Violation[] | 'error';
+  } | null>(null);
   const clave = `${operatorId}|${equipmentId}`;
-  const previaActual = previa?.clave === clave ? previa.violations : null;
+  const completo = Boolean(operatorId && equipmentId);
+  const resuelta = previa?.clave === clave ? previa.violations : null;
+  // derived, not stored: a pair with no answer yet is a pair still being checked
+  const comprobando = completo && resuelta === null;
 
   // server-side preview; the delay debounces the selects and `cancelado` drops late answers
   useEffect(() => {
@@ -66,9 +75,12 @@ export function AsignarForm({
         equipmentId,
       });
 
-      if (!cancelado && res.ok) {
-        setPrevia({ clave: `${operatorId}|${equipmentId}`, violations: res.data.violations });
-      }
+      if (cancelado) return;
+
+      setPrevia({
+        clave: `${operatorId}|${equipmentId}`,
+        violations: res.ok ? res.data.violations : 'error',
+      });
     }, 300);
 
     return () => {
@@ -78,10 +90,18 @@ export function AsignarForm({
   }, [shiftId, operatorId, equipmentId]);
 
   const equipo = equipos.find((e) => e.id === equipmentId);
+  const operador = operadores.find((o) => o.id === operatorId);
+  const disponibles = equipos.filter((e) => e.disponible);
+  const detenidos = equipos.filter((e) => !e.disponible);
+  const certificados = operadores.filter((o) => o.certificaciones !== 'sin certificaciones');
+  const sinCertificar = operadores.filter((o) => o.certificaciones === 'sin certificaciones');
 
   async function enviar(override?: string) {
     setEnviando(true);
     setError(null);
+    setExito(null);
+
+    const etiqueta = `${operador?.fullName ?? 'el operador'} en ${equipo?.code ?? 'el equipo'}`;
 
     const res = await postJson('/api/assignments', {
       shiftId,
@@ -94,6 +114,11 @@ export function AsignarForm({
     setEnviando(false);
 
     if (res.ok) {
+      setExito(
+        override
+          ? `Asignación creada con excepción firmada: ${etiqueta}, ${formatHoras(horas)} h. Queda EN RIESGO y hay que resolverla antes de cerrar el turno.`
+          : `Asignación creada: ${etiqueta}, ${formatHoras(horas)} h. Ya aparece en la tabla de arriba.`,
+      );
       setPrevia(null);
       setEquipmentId('');
       setOperatorId('');
@@ -116,7 +141,7 @@ export function AsignarForm({
           e.preventDefault();
           void enviar();
         }}
-        className="flex flex-wrap items-end gap-4"
+        className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end"
       >
         <label className="block">
           <span className="rotulo">Operador</span>
@@ -124,14 +149,25 @@ export function AsignarForm({
             required
             value={operatorId}
             onChange={(e) => setOperatorId(e.target.value)}
-            className="mt-1.5 block w-72 border border-line bg-canvas px-3 py-2 text-sm"
+            className={`mt-1.5 ${campo.input}`}
           >
-            <option value="">Seleccione…</option>
-            {operadores.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.fullName} ({o.code}) · {o.certificaciones}
-              </option>
-            ))}
+            <option value="">Seleccione un operador…</option>
+            <optgroup label="Con certificaciones registradas">
+              {certificados.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.fullName} ({o.code}) · {o.certificaciones}
+                </option>
+              ))}
+            </optgroup>
+            {sinCertificar.length > 0 && (
+              <optgroup label="Sin certificaciones: serán rechazados">
+                {sinCertificar.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.fullName} ({o.code})
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
 
@@ -141,14 +177,26 @@ export function AsignarForm({
             required
             value={equipmentId}
             onChange={(e) => setEquipmentId(e.target.value)}
-            className="mt-1.5 block w-72 border border-line bg-canvas px-3 py-2 text-sm"
+            className={`mt-1.5 ${campo.input}`}
           >
-            <option value="">Seleccione…</option>
-            {equipos.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.code} · {e.typeName} · {e.estado}
-              </option>
-            ))}
+            <option value="">Seleccione un equipo…</option>
+            <optgroup label="Disponibles">
+              {disponibles.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.code} · {e.typeName} · {formatHoras(e.currentHours)}/
+                  {formatHoras(e.nextMaintenanceHours)} h
+                </option>
+              ))}
+            </optgroup>
+            {detenidos.length > 0 && (
+              <optgroup label="No disponibles: requieren excepción de supervisor">
+                {detenidos.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.code} · {e.typeName} · {e.estado}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
 
@@ -161,43 +209,77 @@ export function AsignarForm({
             step={0.5}
             value={horas}
             onChange={(e) => setHoras(Number(e.target.value))}
-            className="mt-1.5 block w-24 border border-line bg-canvas px-3 py-2 font-mono text-sm"
+            className={`mt-1.5 w-24 ${campo.numero}`}
           />
         </label>
 
         <button
           type="submit"
           disabled={enviando || !equipmentId || !operatorId}
-          className="bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-accent disabled:opacity-40"
+          className={boton.primario}
         >
-          {enviando ? 'Validando…' : 'Validar y asignar'}
+          {enviando ? 'Guardando…' : 'Validar y asignar'}
         </button>
       </form>
 
+      <p className="mt-2 text-xs text-muted">
+        Las horas vienen de la duración del turno ({formatHoras(plannedHours)} h) y se pueden
+        ajustar. La validación definitiva corre en el servidor al guardar.
+      </p>
+
       {/* hint only: the server still validates */}
       {equipo && (
-        <p className="mt-3 text-xs text-muted">
-          {equipo.code}: {equipo.estado} · {formatHoras(equipo.currentHours)} de{' '}
-          {formatHoras(equipo.nextMaintenanceHours)} h del umbral.
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border border-line bg-canvas px-3 py-2 text-xs">
+          <span className="font-mono">{equipo.code}</span>
+          <span className="text-muted">{equipo.estado}</span>
+          <BarraHorometro
+            actual={equipo.currentHours}
+            umbral={equipo.nextMaintenanceHours}
+          />
+          <span className="text-muted">
+            {formatHoras(equipo.currentHours)} de {formatHoras(equipo.nextMaintenanceHours)} h
+            del umbral · quedan{' '}
+            {formatHoras(Math.max(0, equipo.nextMaintenanceHours - equipo.currentHours))} h
+          </span>
+        </div>
+      )}
+
+      {/* its own role="status" announces it; nesting it in the live region below double-reads */}
+      {exito && (
+        <Aviso tono="ok" className="mt-4">
+          {exito}
+        </Aviso>
       )}
 
       {/* the preview appears on its own, so polite; a submit rejection is an alert */}
       <div aria-live="polite">
-        {!error && previaActual && previaActual.length > 0 && (
+        {!error && comprobando && (
+          <p className="mt-4 border border-line bg-canvas px-3 py-2 text-sm text-muted">
+            Comprobando las reglas con esta combinación…
+          </p>
+        )}
+
+        {!error && resuelta === 'error' && (
+          <Aviso tono="neutro" className="mt-4">
+            No se pudo hacer la comprobación previa. Puede enviar igual: la validación que
+            decide corre en el servidor al guardar.
+          </Aviso>
+        )}
+
+        {!error && Array.isArray(resuelta) && resuelta.length > 0 && (
           <div className="mt-4">
             <PanelViolaciones
-              mensaje={`Validación previa: ${previaActual.length} ${previaActual.length === 1 ? 'regla incumplida' : 'reglas incumplidas'} con esta combinación.`}
-              violations={previaActual}
+              mensaje={`Validación previa: ${resuelta.length} ${resuelta.length === 1 ? 'regla incumplida' : 'reglas incumplidas'} con esta combinación. Todavía no se ha guardado nada.`}
+              violations={resuelta}
             />
           </div>
         )}
 
-        {!error && previaActual?.length === 0 && (
-          <p className="mt-4 border border-emerald-700/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+        {!error && Array.isArray(resuelta) && resuelta.length === 0 && (
+          <Aviso tono="ok" className="mt-4">
             Validación previa: sin problemas. La comprobación definitiva se repite al asignar,
             sobre el equipo bloqueado en la base.
-          </p>
+          </Aviso>
         )}
       </div>
 
@@ -206,20 +288,25 @@ export function AsignarForm({
           <PanelViolaciones mensaje={error.message} violations={error.violations} />
 
           {error.canBeOverridden && !esSupervisor && (
-            <p className="text-sm text-muted">
-              Todas las reglas incumplidas son autorizables, pero se necesita un supervisor
-              para firmar la excepción.
-            </p>
+            <Aviso tono="neutro">
+              Todas las reglas incumplidas son autorizables, pero firmar una excepción es
+              atribución del supervisor. Pídale que la autorice o elija otra combinación.
+            </Aviso>
           )}
 
           {puedeForzar && !pidiendoMotivo && (
-            <button
-              type="button"
-              onClick={() => setPidiendoMotivo(true)}
-              className="border border-accent px-4 py-2 text-sm font-medium text-accent hover:bg-accent hover:text-white"
-            >
-              Forzar con autorización
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPidiendoMotivo(true)}
+                className={boton.excepcion}
+              >
+                Forzar con autorización
+              </button>
+              <span className="text-xs text-muted">
+                Como supervisor puede autorizar estas reglas dejando constancia del motivo.
+              </span>
+            </div>
           )}
 
           {puedeForzar && pidiendoMotivo && (
@@ -228,10 +315,11 @@ export function AsignarForm({
                 <span className="rotulo">Motivo de la excepción</span>
                 <textarea
                   rows={3}
+                  autoComplete="off"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   placeholder="Ej.: Frente 4 sin unidad de reemplazo; se traslada a taller al cierre del turno."
-                  className="mt-1.5 w-full border border-line bg-surface px-3 py-2 text-sm"
+                  className={`mt-1.5 ${campo.input} bg-surface`}
                 />
               </label>
 
@@ -240,19 +328,19 @@ export function AsignarForm({
                 con su nombre en la auditoría y la asignación nace <strong>en riesgo</strong>.
               </p>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   disabled={motivo.trim().length < MOTIVO_MINIMO || enviando}
                   onClick={() => void enviar(motivo.trim())}
-                  className="bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                  className={boton.peligro}
                 >
-                  Autorizar y asignar
+                  {enviando ? 'Autorizando…' : 'Autorizar y asignar'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setPidiendoMotivo(false)}
-                  className="px-4 py-2 text-sm text-muted underline"
+                  className={boton.secundario}
                 >
                   Cancelar
                 </button>
