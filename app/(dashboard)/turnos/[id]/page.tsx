@@ -281,6 +281,7 @@ export default async function TurnoPage({
           ) : (
             <CerrarTurnoForm
               shiftId={turno.id}
+              duracionTurno={Number(turno.plannedHours)}
               filas={vigentes.map((a) => ({
                 id: a.id,
                 equipmentCode: a.equipment.code,

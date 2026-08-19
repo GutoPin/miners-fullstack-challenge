@@ -42,6 +42,18 @@ export async function createAssignment(input: CreateAssignmentInput) {
     const { context, equipmentCode, operatorName, shiftPlannedHours } =
       await buildAssignmentContext(tx, input);
 
+    // an assignment cannot plan more operation than the shift itself lasts: the equipment is
+    // only in the operator's hands during the journey, so anything beyond it is not schedulable
+    const horas = input.plannedHours ?? shiftPlannedHours;
+
+    if (!Number.isFinite(horas) || horas <= 0 || horas > shiftPlannedHours) {
+      throw new ServiceError({
+        code: 'HOURS_EXCEED_SHIFT',
+        message: `El turno dura ${shiftPlannedHours} h, así que la asignación no puede planificar ${horas} h. Indique un valor entre 0 y ${shiftPlannedHours}, o cree un turno más largo.`,
+        status: 400,
+      });
+    }
+
     // 3. pure domain: returns every violation (rule 11)
     const violations = validateAssignment(context);
     const bloqueantes = violations.filter((v) => v.severity !== 'WARNING');
@@ -74,7 +86,7 @@ export async function createAssignment(input: CreateAssignmentInput) {
           shiftId: input.shiftId,
           operatorId: input.operatorId,
           equipmentId: input.equipmentId,
-          plannedHours: input.plannedHours ?? shiftPlannedHours,
+          plannedHours: horas,
           createdById: input.userId,
           // forced is not normal, and looks that way across the whole app
           status: forzada ? 'AT_RISK' : 'ACTIVE',

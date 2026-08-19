@@ -63,6 +63,7 @@ export async function closeShift(input: CloseShiftInput) {
 
     const computables = shift.assignments.filter((a) => a.status === 'ACTIVE');
     const conocidas = new Set(shift.assignments.map((a) => a.id));
+    const duracionTurno = Number(shift.plannedHours);
 
     for (const id of Object.keys(input.actualHours ?? {})) {
       if (!conocidas.has(id)) {
@@ -80,10 +81,12 @@ export async function closeShift(input: CloseShiftInput) {
       const hours = input.actualHours?.[assignment.id] ?? planned;
       const note = input.notes?.[assignment.id]?.trim();
 
-      if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
+      // the ceiling is the journey, not an arbitrary 24: a machine cannot have operated more
+      // hours than the shift it was assigned to lasted
+      if (!Number.isFinite(hours) || hours <= 0 || hours > duracionTurno) {
         throw new ServiceError({
-          code: 'INVALID_ACTUAL_HOURS',
-          message: `Las horas de ${assignment.operator.fullName} en ${assignment.equipment.code} deben estar entre 0 y 24; se recibió ${hours}.`,
+          code: 'HOURS_EXCEED_SHIFT',
+          message: `${assignment.equipment.code} no puede registrar ${hours} h: el turno dura ${duracionTurno} h. Las horas reales de ${assignment.operator.fullName} deben estar entre 0 y ${duracionTurno}.`,
           status: 400,
         });
       }

@@ -205,8 +205,9 @@ export function AsignarForm({
           <span className="rotulo">Horas</span>
           <input
             type="number"
-            min={1}
-            max={24}
+            min={0.5}
+            // the shift is the ceiling: the server rejects anything past the journey
+            max={plannedHours}
             step={0.5}
             value={horas}
             onChange={(e) => setHoras(Number(e.target.value))}
@@ -226,7 +227,8 @@ export function AsignarForm({
 
       <p className="mt-2 text-xs text-muted">
         Las horas vienen de la duración del turno ({formatHoras(plannedHours)} h) y se pueden
-        ajustar. La validación definitiva corre en el servidor al guardar.
+        reducir, nunca superar: un equipo no opera más allá de la jornada a la que se le asignó.
+        La validación definitiva corre en el servidor al guardar.
       </p>
 
       {/* hint only: the server still validates */}

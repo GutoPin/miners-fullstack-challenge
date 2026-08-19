@@ -1,8 +1,9 @@
 import Link from 'next/link';
 
 import { DisponibilidadPorDia, MargenVsConsumo } from '@/src/components/charts';
-import { JORNADA, formatHoras } from '@/src/components/format';
-import { Aviso, Badge, Encabezado, Panel, tabla } from '@/src/components/ui';
+import { ESTADO_EQUIPO, JORNADA, formatHoras } from '@/src/components/format';
+import { Aviso, Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
+import type { EquipmentStatus } from '@/src/domain/types';
 import { formatIsoDate, toOperationalDate } from '@/src/services/dates';
 import { getProjection, type ProjectionRow } from '@/src/services/get-projection';
 
@@ -25,8 +26,14 @@ export default async function ProyeccionPage() {
   const desde = toOperationalDate(hoy);
   const hasta = toOperationalDate(new Date(hoy.getTime() + DIAS * 86_400_000));
 
-  const cruzan = filas.filter((f) => f.projection.status === 'WILL_CROSS');
-  const bloqueados = filas.filter((f) => f.projection.status === 'ALREADY_BLOCKED');
+  // only equipment with work scheduled is a projection; the rest is present state, and the
+  // fleet screen already tells it. Listing a blocked unit with no shifts as "exceeded" here
+  // adds a red row to a screen about the coming week without adding a decision to take.
+  const enProyeccion = filas.filter((f) => f.plannedShifts > 0);
+  const sinCarga = filas.filter((f) => f.plannedShifts === 0);
+
+  const cruzan = enProyeccion.filter((f) => f.projection.status === 'WILL_CROSS');
+  const bloqueados = enProyeccion.filter((f) => f.projection.status === 'ALREADY_BLOCKED');
 
   const ventana = Array.from({ length: DIAS }, (_, i) =>
     toOperationalDate(new Date(hoy.getTime() + i * 86_400_000)),
@@ -37,15 +44,12 @@ export default async function ProyeccionPage() {
     return { fecha, detenidos, disponibles: filas.length - detenidos };
   });
 
-  // only units with work scheduled: a bar for an idle unit says nothing
-  const conCarga = filas
-    .filter((f) => f.plannedHours > 0)
-    .map((f) => ({
-      code: f.code,
-      margen: Math.max(0, f.projection.hoursRemaining),
-      consumo: f.plannedHours,
-      cruza: f.projection.status !== 'SAFE',
-    }));
+  const conCarga = enProyeccion.map((f) => ({
+    code: f.code,
+    margen: Math.max(0, f.projection.hoursRemaining),
+    consumo: f.plannedHours,
+    cruza: f.projection.status !== 'SAFE',
+  }));
 
   return (
     <>
@@ -56,13 +60,13 @@ export default async function ProyeccionPage() {
 
       {cruzan.length + bloqueados.length === 0 ? (
         <Aviso tono="ok" titulo="Ningún equipo alcanza su umbral esta semana." className="mb-6">
-          Con los turnos programados hoy, toda la flota llega al{' '}
+          Con los turnos programados hoy, los {enProyeccion.length} equipos con carga llegan al{' '}
           {formatIsoDate(hasta)} sin cruzar su umbral de mantenimiento.
         </Aviso>
       ) : (
         <Aviso
           tono="aviso"
-          titulo={`${cruzan.length + bloqueados.length} de ${filas.length} equipos quedan fuera de servicio en la ventana.`}
+          titulo={`${cruzan.length + bloqueados.length} de ${enProyeccion.length} equipos con carga quedan fuera de servicio en la ventana.`}
           className="mb-6"
         >
           {bloqueados.length > 0 && (
@@ -105,7 +109,18 @@ export default async function ProyeccionPage() {
         </Panel>
       </div>
 
-      <Panel titulo="Detalle por equipo" className="mt-6">
+      <Panel
+        icono="proyeccion"
+        titulo={`Detalle por equipo (${enProyeccion.length} con carga)`}
+        descripcion="Solo los equipos con turnos programados en la ventana: son los únicos que hay algo que proyectar"
+        className="mt-6"
+      >
+        {enProyeccion.length === 0 ? (
+          <Vacio>
+            Ningún equipo tiene turnos programados entre el {formatIsoDate(desde)} y el{' '}
+            {formatIsoDate(hasta)}, así que no hay consumo de horas que simular.
+          </Vacio>
+        ) : (
         <div className={tabla.wrapper}>
           <table className={tabla.table}>
             <thead>
@@ -122,7 +137,7 @@ export default async function ProyeccionPage() {
               </tr>
             </thead>
             <tbody>
-              {filas.map((f) => {
+              {enProyeccion.map((f) => {
                 const p = f.projection;
                 const dias =
                   p.status === 'WILL_CROSS'
@@ -183,6 +198,7 @@ export default async function ProyeccionPage() {
             </tbody>
           </table>
         </div>
+        )}
 
         <div className="space-y-1 border-t border-line px-4 py-3 text-xs text-muted">
           <p>
@@ -200,6 +216,39 @@ export default async function ProyeccionPage() {
           </p>
         </div>
       </Panel>
+
+      {sinCarga.length > 0 && (
+        <Panel
+          icono="equipos"
+          titulo={`Sin turnos programados (${sinCarga.length})`}
+          descripcion="No entran en la proyección porque no tienen horas que consumir esta semana"
+          className="mt-6"
+        >
+          <ul className="divide-y divide-line">
+            {sinCarga.map((f) => (
+              <li key={f.equipmentId} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+                <Link
+                  href={`/equipos/${f.equipmentId}`}
+                  className="w-20 font-mono text-sm hover:text-accent"
+                >
+                  {f.code}
+                </Link>
+                <Badge tono={ESTADO_EQUIPO[f.status as EquipmentStatus].tono}>
+                  {ESTADO_EQUIPO[f.status as EquipmentStatus].label}
+                </Badge>
+                <span className="text-xs text-muted">
+                  {formatHoras(f.currentHours)} de {formatHoras(f.nextMaintenanceHours)} h del
+                  umbral
+                  {f.status === 'BLOCKED' &&
+                    ' · necesita mantenimiento para volver a estar disponible'}
+                  {f.status === 'AVAILABLE' &&
+                    ' · disponible, pero nadie le ha asignado turnos en la ventana'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
     </>
   );
 }

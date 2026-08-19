@@ -183,3 +183,55 @@ describe('closeShift', () => {
     expect(Number(equipo.currentHours)).toBe(200 + 36);
   });
 });
+
+describe('las horas no pueden exceder la jornada', () => {
+  it('no se planifica una asignación más larga que el turno', async () => {
+    const { equipmentId, operatorId } = await escenario('G', 0, 5000);
+    const turno = await crearTurno(11, 'DAY', 8);
+
+    await expect(
+      createAssignment({ shiftId: turno.id, equipmentId, operatorId, userId, plannedHours: 12 }),
+    ).rejects.toMatchObject({ code: 'HOURS_EXCEED_SHIFT' });
+  });
+
+  it('planificar menos horas que el turno sí se permite', async () => {
+    const { equipmentId, operatorId } = await escenario('H', 0, 5000);
+    const turno = await crearTurno(12, 'DAY', 8);
+
+    const { assignment } = await createAssignment({
+      shiftId: turno.id,
+      equipmentId,
+      operatorId,
+      userId,
+      plannedHours: 6,
+    });
+
+    expect(Number(assignment.plannedHours)).toBe(6);
+  });
+
+  it('al cerrar no se registran más horas reales que la duración del turno', async () => {
+    const { equipmentId, operatorId } = await escenario('I', 0, 5000);
+    const turno = await crearTurno(13, 'DAY', 8);
+    const { assignment } = await createAssignment({
+      shiftId: turno.id,
+      equipmentId,
+      operatorId,
+      userId,
+    });
+
+    await expect(
+      closeShift({
+        shiftId: turno.id,
+        userId,
+        actualHours: { [assignment.id]: 10 },
+        notes: { [assignment.id]: 'Se extendió el frente.' },
+      }),
+    ).rejects.toMatchObject({ code: 'HOURS_EXCEED_SHIFT' });
+
+    // el turno sigue abierto y el horómetro intacto: la validación corre antes de escribir
+    const sinCerrar = await prisma.shift.findUniqueOrThrow({ where: { id: turno.id } });
+    const equipo = await prisma.equipment.findUniqueOrThrow({ where: { id: equipmentId } });
+    expect(sinCerrar.status).toBe('PLANNED');
+    expect(Number(equipo.currentHours)).toBe(0);
+  });
+});

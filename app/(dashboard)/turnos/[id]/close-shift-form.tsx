@@ -22,7 +22,16 @@ export interface FilaCierre {
 const DESVIO_HORAS = 2;
 const DESVIO_RELATIVO = 0.25;
 
-export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: FilaCierre[] }) {
+export function CerrarTurnoForm({
+  shiftId,
+  duracionTurno,
+  filas,
+}: {
+  shiftId: string;
+  /** the journey's length: no assignment can report more operation than this */
+  duracionTurno: number;
+  filas: FilaCierre[];
+}) {
   const router = useRouter();
   const [horas, setHoras] = useState<Record<string, number>>(
     Object.fromEntries(filas.map((f) => [f.id, f.plannedHours])),
@@ -44,6 +53,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
   const faltaNota = filas.some((f) => desvioGrande(f) && !(notas[f.id] ?? '').trim());
   const totalHoras = filas.reduce((t, f) => t + reales(f), 0);
   const seBloquean = filas.filter((f) => f.currentHours + reales(f) >= f.nextMaintenanceHours);
+  const excedidas = filas.filter((f) => reales(f) > duracionTurno);
 
   async function cerrar() {
     setEnviando(true);
@@ -88,7 +98,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
                       // without a name, a screen reader announces twelve identical boxes
                       aria-label={`Horas reales de ${f.equipmentCode}`}
                       min={0.5}
-                      max={24}
+                      max={duracionTurno}
                       step={0.5}
                       value={h}
                       onChange={(e) =>
@@ -151,6 +161,15 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
           </div>
         )}
 
+        {excedidas.length > 0 && (
+          <Aviso tono="bloqueo" titulo="Hay horas por encima de la jornada.">
+            {excedidas.map((f) => f.equipmentCode).join(', ')}{' '}
+            {excedidas.length === 1 ? 'registra' : 'registran'} más de las {duracionTurno} h que
+            dura el turno. Un equipo no opera fuera de la jornada a la que fue asignado: corrija
+            las horas o cree un turno con la duración real.
+          </Aviso>
+        )}
+
         {faltaNota && (
           <Aviso tono="aviso" titulo="Faltan notas de desvío.">
             Hay diferencias mayores a {DESVIO_HORAS} h o al {DESVIO_RELATIVO * 100} % entre las
@@ -161,7 +180,7 @@ export function CerrarTurnoForm({ shiftId, filas }: { shiftId: string; filas: Fi
 
         <button
           type="button"
-          disabled={enviando || faltaNota}
+          disabled={enviando || faltaNota || excedidas.length > 0}
           onClick={() => void cerrar()}
           className={boton.primario}
         >
