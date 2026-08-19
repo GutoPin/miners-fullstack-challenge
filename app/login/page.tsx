@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { AuthError } from 'next-auth';
 
 import { auth, signIn } from '@/src/auth';
+import { CredencialesDemo } from '@/src/components/credentials-panel';
 import { Icon, type NombreIcono } from '@/src/components/icons';
 import { BotonEnviar } from '@/src/components/submit-button';
 import { Aviso, boton, campo } from '@/src/components/ui';
@@ -160,11 +161,9 @@ export default async function LoginPage({
             </BotonEnviar>
           </form>
 
-          <p className="mt-8 border-t border-line pt-4 text-xs leading-relaxed text-muted">
-            Las credenciales de los tres usuarios de prueba —supervisor, planificador y
-            consulta— están en el <span className="font-medium">README</span> del repositorio,
-            junto con el recorrido sugerido de la demo.
-          </p>
+          <div className="mt-8">
+            <CredencialesDemo />
+          </div>
         </div>
       </section>
     </main>

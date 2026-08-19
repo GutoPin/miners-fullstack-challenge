@@ -41,6 +41,40 @@ body {
   outline-offset: 2px;
 }
 
+/* `showModal()` centres the dialog and makes the page inert, but does not stop it scrolling */
+dialog[open] {
+  margin: auto;
+  animation: modal-entra 160ms ease-out;
+}
+
+dialog[open]::backdrop {
+  animation: fundido 160ms ease-out;
+}
+
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
+@keyframes modal-entra {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes fundido {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[open],
+  dialog[open]::backdrop {
+    animation: none;
+  }
+}
+
 /* the panel a jump link points at: without this the page scrolls and nothing looks different */
 :target {
   outline: 2px solid var(--color-accent);

@@ -1,7 +1,12 @@
+import Link from 'next/link';
+
+import { auth } from '@/src/auth';
 import { diasHasta } from '@/src/components/format';
+import { Icon } from '@/src/components/icons';
 import { Aviso, Badge, Encabezado, Panel, Vacio, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import { formatIsoDate, toIsoDate } from '@/src/services/dates';
+import { NuevoOperador } from './new-operator-modal';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Operadores · MineOps' };
@@ -10,12 +15,18 @@ export const metadata = { title: 'Operadores · MineOps' };
 const AVISO_DIAS = 30;
 
 export default async function OperadoresPage() {
-  const operadores = await prisma.operator.findMany({
-    include: {
-      certifications: { include: { equipmentType: true }, orderBy: { expiresAt: 'desc' } },
-    },
-    orderBy: { code: 'asc' },
-  });
+  const [session, operadores, tipos] = await Promise.all([
+    auth(),
+    prisma.operator.findMany({
+      include: {
+        certifications: { include: { equipmentType: true }, orderBy: { expiresAt: 'desc' } },
+      },
+      orderBy: { code: 'asc' },
+    }),
+    prisma.equipmentType.findMany({ orderBy: { code: 'asc' } }),
+  ]);
+
+  const puedeOperar = session?.user.role === 'PLANNER' || session?.user.role === 'SUPERVISOR';
 
   const certificaciones = operadores.flatMap((o) =>
     o.certifications.map((c) => ({ operador: o.fullName, dias: diasHasta(c.expiresAt) })),
@@ -29,6 +40,13 @@ export default async function OperadoresPage() {
       <Encabezado
         titulo="Operadores"
         descripcion="Certificaciones por tipo de equipo y su vencimiento. La vigencia se evalúa contra la fecha del turno, no contra hoy: por eso una certificación vigente hoy puede rechazar un turno de la próxima semana."
+        acciones={
+          puedeOperar ? (
+            <NuevoOperador
+              tipos={tipos.map((t) => ({ id: t.id, code: t.code, name: t.name }))}
+            />
+          ) : undefined
+        }
       />
 
       <dl className="mb-6 grid grid-cols-2 border border-line bg-surface sm:grid-cols-4">
@@ -75,12 +93,17 @@ export default async function OperadoresPage() {
                 <th scope="col" className={tabla.th}>Documento</th>
                 <th scope="col" className={tabla.th}>Situación</th>
                 <th scope="col" className={tabla.th}>Certificaciones</th>
+                <th scope="col" className={tabla.th}>Perfil</th>
               </tr>
             </thead>
             <tbody>
               {operadores.map((o) => (
                 <tr key={o.id}>
-                  <td className={`${tabla.td} font-mono`}>{o.code}</td>
+                  <td className={tabla.td}>
+                    <Link href={`/operadores/${o.id}`} className="font-mono hover:text-accent">
+                      {o.code}
+                    </Link>
+                  </td>
                   <td className={`${tabla.td} font-medium`}>{o.fullName}</td>
                   <td className={`${tabla.td} font-mono text-muted`}>{o.document}</td>
                   <td className={tabla.td}>
@@ -112,6 +135,15 @@ export default async function OperadoresPage() {
                         })}
                       </ul>
                     )}
+                  </td>
+                  <td className={tabla.td}>
+                    <Link
+                      href={`/operadores/${o.id}`}
+                      className="inline-flex items-center gap-2 bg-ink px-3 py-2 text-xs font-medium whitespace-nowrap text-white hover:bg-accent"
+                    >
+                      <Icon name="persona" className="size-4" />
+                      {puedeOperar ? 'Gestionar' : 'Ver perfil'}
+                    </Link>
                   </td>
                 </tr>
               ))}

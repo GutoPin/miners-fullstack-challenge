@@ -1,9 +1,11 @@
 import Link from 'next/link';
 
+import { auth } from '@/src/auth';
 import { ESTADO_EQUIPO, formatHoras } from '@/src/components/format';
 import { Aviso, Badge, BarraHorometro, Encabezado, Panel, tabla } from '@/src/components/ui';
 import { prisma } from '@/src/db/prisma';
 import type { EquipmentStatus } from '@/src/domain/types';
+import { NuevoEquipo } from './new-equipment-modal';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Equipos · MineOps' };
@@ -16,10 +18,16 @@ const ESTADOS: EquipmentStatus[] = [
 ];
 
 export default async function EquiposPage() {
-  const equipos = await prisma.equipment.findMany({
-    include: { type: true, _count: { select: { maintenances: true } } },
-    orderBy: { code: 'asc' },
-  });
+  const [session, equipos, tipos] = await Promise.all([
+    auth(),
+    prisma.equipment.findMany({
+      include: { type: true, _count: { select: { maintenances: true } } },
+      orderBy: { code: 'asc' },
+    }),
+    prisma.equipmentType.findMany({ orderBy: { code: 'asc' } }),
+  ]);
+
+  const puedeOperar = session?.user.role === 'PLANNER' || session?.user.role === 'SUPERVISOR';
 
   const porEstado = equipos.reduce<Record<string, number>>((acc, e) => {
     acc[e.status] = (acc[e.status] ?? 0) + 1;
@@ -33,6 +41,18 @@ export default async function EquiposPage() {
       <Encabezado
         titulo="Equipos"
         descripcion="Horómetro, umbral de mantenimiento y estado. Un equipo se bloquea solo al alcanzar su umbral; se libera registrando el mantenimiento."
+        acciones={
+          puedeOperar ? (
+            <NuevoEquipo
+              tipos={tipos.map((t) => ({
+                id: t.id,
+                code: t.code,
+                name: t.name,
+                maintenanceIntervalHours: t.maintenanceIntervalHours,
+              }))}
+            />
+          ) : undefined
+        }
       />
 
       <dl className="mb-6 grid grid-cols-2 border border-line bg-surface sm:grid-cols-4">

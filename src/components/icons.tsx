@@ -30,6 +30,8 @@ const TRAZOS = {
   panel: <path d="M4 4h16v16H4zM10 4v16" />,
   salir: <path d="M15 12H3m0 0l4-4m-4 4l4 4M10 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8" />,
   flecha: <path d="M4 12h16m0 0l-6-6m6 6l-6 6" />,
+  desplegar: <path d="M6 9.5l6 6 6-6" />,
+  persona: <path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4.5 21v-1.5A5.5 5.5 0 0 1 10 14h4a5.5 5.5 0 0 1 5.5 5.5V21" />,
   reloj: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2" />,
 } satisfies Record<string, ReactNode>;
 
